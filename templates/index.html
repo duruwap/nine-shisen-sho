@@ -6,6 +6,22 @@
   <meta name="theme-color" content="#FFF8F0">
   <meta name="description" content="숫자를 드래그로 묶어 목표 숫자를 만들면 팡! 2분 동안 최대한 많이 지우기">
   <title>드래그 넘버</title>
+
+  <!-- Link previews (KakaoTalk, Facebook, X, Slack, iMessage…) -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="드래그 넘버">
+  <meta property="og:title" content="드래그 넘버 · 2분 숫자 퍼즐">
+  <meta property="og:description" content="숫자를 드래그로 묶어 목표 숫자를 만들면 팡! 2분 동안 최대한 많이 지워 보세요.">
+  <meta property="og:url" content="{{ absolute('/') }}">
+  <meta property="og:image" content="{{ absolute(asset('og-image.png')) }}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="드래그 넘버 — 숫자를 묶어 목표 숫자를 만드는 퍼즐">
+  <meta property="og:locale" content="ko_KR">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="드래그 넘버 · 2분 숫자 퍼즐">
+  <meta name="twitter:description" content="숫자를 드래그로 묶어 목표 숫자를 만들면 팡!">
+  <meta name="twitter:image" content="{{ absolute(asset('og-image.png')) }}">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='10' y='20' width='20' height='24' rx='6' fill='%23CAFFBF'/%3E%3Crect x='34' y='20' width='20' height='24' rx='6' fill='%23A0C4FF'/%3E%3Crect x='4' y='14' width='56' height='36' rx='10' fill='none' stroke='%23FF8A65' stroke-width='4' stroke-dasharray='7 5'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="{{ asset('css/style.css') }}">
   <script>

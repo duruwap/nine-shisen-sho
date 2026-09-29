@@ -184,6 +184,7 @@ do_start() {
     (
         cd "$APP_DIR" || exit 1
         export SCS_APP_NAME="$APP_NAME" SCS_DATA_DIR="$DATA_DIR" SCS_LOG_DIR="$LOG_DIR" PORT
+        [ -n "${PUBLIC_URL:-}" ] && export PUBLIC_URL
         setsid nohup bash -c '
             "$0" --chdir "$1" --bind "$2" --workers "$3" --threads "$4" --timeout "$5" \
                  --pid "$6" --access-logfile - --error-logfile - --capture-output \

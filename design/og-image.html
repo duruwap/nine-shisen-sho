@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Black+Han+Sans&display=swap">
+<style>
+  :root {
+    --bg: #FFF8F0; --text: #3B3530; --muted: #8C8178; --accent: #FF8A65; --ok: #43A047;
+    --c1: #FFB5A7; --c2: #FFD6A5; --c3: #FDFFB6; --c4: #CAFFBF; --c5: #9BF6FF;
+    --c6: #A0C4FF; --c7: #BDB2FF; --c8: #FFC6FF; --c9: #D7E3C8;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    position: relative; background: var(--bg); color: var(--text);
+    font-family: 'Jua', sans-serif;
+  }
+  /* Faint board of number chips across the whole card */
+  .bg-board {
+    position: absolute; inset: -20px -30px;
+    display: grid; grid-template-columns: repeat(16, 76px); grid-auto-rows: 76px; gap: 0;
+    transform: rotate(-6deg); opacity: .5;
+  }
+  .bg-board span {
+    margin: 6px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
+    font-family: 'Black Han Sans'; font-size: 34px; color: rgba(59,53,48,.55);
+    box-shadow: 0 4px 0 rgba(0,0,0,.08);
+  }
+  /* Cream glow in the middle so the title reads cleanly */
+  .glow {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse 560px 300px at 50% 52%, var(--bg) 58%, rgba(255,248,240,.0) 100%);
+  }
+  .center {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding-top: 6px;
+  }
+  .demo { position: relative; display: flex; gap: 12px; padding: 12px; border: 5px solid var(--ok); border-radius: 22px;
+    background: rgba(67,160,71,.14); margin-bottom: 26px; }
+  .demo .chip {
+    width: 78px; height: 78px; border-radius: 20px; display: flex; align-items: center; justify-content: center;
+    font-family: 'Black Han Sans'; font-size: 48px; color: var(--text); box-shadow: 0 5px 0 rgba(0,0,0,.12);
+  }
+  .sum {
+    position: absolute; right: -22px; top: -24px; padding: 4px 14px; border-radius: 20px;
+    background: var(--ok); color: #fff; font-family: 'Black Han Sans'; font-size: 30px;
+    box-shadow: 0 4px 0 rgba(0,0,0,.12);
+  }
+  .target {
+    position: absolute; left: -150px; top: 50%; transform: translateY(-50%);
+    width: 112px; height: 104px; border-radius: 28px; background: var(--accent); color: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    box-shadow: 0 6px 0 rgba(0,0,0,.12);
+  }
+  .target small { font-size: 22px; line-height: 1; opacity: .9; }
+  .target b { font-family: 'Black Han Sans'; font-size: 56px; line-height: 1; font-weight: 400; }
+  .arrow { position: absolute; left: -34px; top: 50%; transform: translateY(-50%); font-size: 40px; color: var(--muted); }
+  .cursor { position: absolute; right: -58px; bottom: -58px; width: 64px; height: 64px; }
+  h1 {
+    font-family: 'Black Han Sans'; font-weight: 400; font-size: 124px; line-height: 1; letter-spacing: -2px;
+    color: var(--text); text-shadow: 0 6px 0 rgba(255,138,101,.35);
+  }
+  p.tag { margin-top: 18px; font-size: 40px; color: var(--text); }
+  p.tag em { font-style: normal; color: var(--accent); }
+  .pill {
+    margin-top: 22px; padding: 10px 26px; border-radius: 30px; background: var(--text); color: var(--bg);
+    font-size: 28px;
+  }
+  .bit { position: absolute; border-radius: 3px; }
+</style>
+</head>
+<body>
+  <div class="bg-board" id="bg"></div>
+  <div class="glow"></div>
+  <div class="center">
+    <div class="demo">
+      <div class="target"><small>목표</small><b>10</b></div>
+      <span class="arrow">›</span>
+      <span class="chip" style="background:var(--c3)">3</span>
+      <span class="chip" style="background:var(--c5)">5</span>
+      <span class="chip" style="background:var(--c2)">2</span>
+      <span class="sum">10</span>
+      <svg class="cursor" viewBox="0 0 64 64"><path d="M10 6 L10 50 L22 39 L31 58 L39 54 L30 36 L46 36 Z" fill="#fff" stroke="#3B3530" stroke-width="4" stroke-linejoin="round"/></svg>
+    </div>
+    <h1>드래그 넘버</h1>
+    <p class="tag">숫자를 쓱 묶어 <em>목표 숫자</em>를 만들면 팡!</p>
+    <div class="pill">2분 타임어택 숫자 퍼즐</div>
+  </div>
+  <script>
+    // Deterministic pseudo-random board + confetti bits.
+    let seed = 7;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const bg = document.getElementById('bg');
+    for (let i = 0; i < 16 * 10; i++) {
+      const v = 1 + Math.floor(rnd() * 9);
+      const s = document.createElement('span');
+      s.textContent = v;
+      s.style.background = `var(--c${v})`;
+      bg.appendChild(s);
+    }
+    const colors = ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#C77DFF', '#FF9F45'];
+    const spots = [[80,70],[150,520],[1100,90],[1040,540],[230,300],[980,300],[330,560],[880,60],[40,380],[1150,400],[420,40],[760,585]];
+    spots.forEach(([x, y], i) => {
+      const b = document.createElement('i');
+      b.className = 'bit';
+      const w = 12 + rnd() * 10;
+      b.style.cssText = `left:${x}px;top:${y}px;width:${w}px;height:${w * .5}px;background:${colors[i % colors.length]};transform:rotate(${rnd() * 180}deg)`;
+      document.body.appendChild(b);
+    });
+  </script>
+</body>
+</html>

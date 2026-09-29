@@ -26,6 +26,13 @@ python app.py          # http://localhost:15004
 
 실제 동작은 공통 런처 `scripts/scs-run.sh <앱이름>`이 담당하고, 포트·워커 수 등은 `scsrun.conf`에서 바꿉니다. 다른 앱에서는 `startup.sh`의 `APP_NAME`(=레포지토리 이름)과 `scsrun.conf`만 바꿔 그대로 씁니다. git pull·pip 설치가 실패하면 기존 서버는 멈추지 않고 그대로 둡니다.
 
+## 링크 미리보기 (카카오톡 등)
+
+- `templates/index.html`에 Open Graph / Twitter 카드 메타 태그가 있고, 미리보기 이미지는 `static/og-image.png`(1200×630)입니다.
+- 카카오톡은 `og:image`를 절대 URL로 요구하므로 `scsrun.conf`의 `PUBLIC_URL`(기본 `https://nine.duruwap.com`)을 앞에 붙입니다. 비워 두면 요청 호스트(nginx의 `X-Forwarded-Proto/Host`)를 씁니다.
+- 이미지를 고치려면 `design/og-image.html`을 수정하고 `node design/render-og.js`로 다시 렌더링합니다.
+- 카카오톡은 미리보기를 캐시하므로, 예전 미리보기가 보이면 [카카오 공유 디버거](https://developers.kakao.com/tool/debugger/sharing)에서 URL을 넣고 캐시를 초기화합니다.
+
 ## 테스트
 
 ```bash
@@ -46,6 +53,7 @@ node --test tests/*.test.js   # 영역 합 계산 · 보드 생성 · 목표 생
 | `static/js/audio.js` | Web Audio API 효과음 합성 (음원 파일 없음) |
 | `static/js/i18n.js` | 한·영·중·일 |
 | `static/css/style.css` | 크림 톤 라이트/다크 테마, 반응형 보드 |
+| `static/og-image.png`, `design/` | 링크 미리보기 이미지와 그 원본(HTML) · 렌더 스크립트 |
 
 ## 규칙과 결정 사항
 

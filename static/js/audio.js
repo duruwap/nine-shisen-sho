@@ -70,16 +70,10 @@
     src.stop(t0 + dur + 0.02);
   }
 
-  var SEMI = Math.pow(2, 1 / 12);
-  var MAJOR = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19];
-
   var sfx = {
     select: function () { tone('sine', 880, 880, 0.06, 0.25); },
-    pop: function (combo) {
-      // Combo climbs the major scale: 도-레-미…
-      var step = MAJOR[Math.min(Math.max(0, (combo || 1) - 1), MAJOR.length - 1)];
-      var k = Math.pow(SEMI, step);
-      tone('sine', 600 * k, 1200 * k, 0.08, 0.35);
+    pop: function () {
+      tone('sine', 600, 1200, 0.08, 0.35);
       noise(0.03, 0.25);
     },
     fail: function () { tone('triangle', 220, 160, 0.15, 0.35); },

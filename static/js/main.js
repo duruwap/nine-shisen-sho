@@ -5,8 +5,6 @@
   var t = I18n.t;
 
   var GAME_MS = 120000;
-  var COMBO_MS = 2000;
-  var CLEAR_BONUS = 10;
   var PATH_MS = 250;
   var POP_MS = 300;
   var SHUFFLE_MS = 400;
@@ -230,20 +228,10 @@
     $('time-fill').style.transform = 'scaleX(' + left / GAME_MS + ')';
     hudEl.classList.toggle('urgent', left <= 10000 && left > 0);
     $('score-text').textContent = S.score;
-    if (S.combo >= 2 && S.elapsed - S.lastPopAt > COMBO_MS) {
-      S.combo = 0;
-      $('combo-text').textContent = '';
-    }
     if (secs !== S.lastSec) {
       if (secs <= 10 && secs > 0 && S.lastSec != null) Sound.play('tick');
       S.lastSec = secs;
     }
-  }
-
-  function showCombo() {
-    var el = $('combo-text');
-    el.textContent = S.combo >= 2 ? t('combo', { n: S.combo }) : '';
-    if (S.combo >= 2) restartAnim(el, 'bump');
   }
 
   // ---------- Game flow ----------
@@ -263,14 +251,13 @@
       selected: null,
       cursor: { r: 0, c: 0 },
       keyboard: false,
-      score: 0, pairs: 0, combo: 0, maxCombo: 0, lastPopAt: null, clears: 0,
+      score: 0, pairs: 0, clears: 0,
       elapsed: 0, lastFrame: 0, lastSec: null,
       running: false, paused: false, over: false
     };
     S.grid = newGrid(S.rows, S.cols);
     clearBoardEls();
     boardEl.classList.remove('paused');
-    $('combo-text').textContent = '';
     show('game');
     layout();
     placeAll();
@@ -357,25 +344,21 @@
     S.grid[a.r][a.c] = null;
     S.grid[b.r][b.c] = null;
 
-    S.combo = S.lastPopAt != null && S.elapsed - S.lastPopAt <= COMBO_MS ? S.combo + 1 : 1;
-    S.lastPopAt = S.elapsed;
-    S.maxCombo = Math.max(S.maxCombo, S.combo);
-    var gained = 1 + (S.combo >= 3 ? 1 : 0);
-    S.score += gained;
+    // Score = number of cells cleared.
+    S.score += 2;
     S.pairs += 1;
-    showCombo();
 
     [elA, elB].forEach(function (el) { el.classList.add('matched'); el.classList.remove('selected'); });
     drawPath(path, colorOf(ta.v));
     placeAll();
 
     setTimeout(function () {
-      Sound.play('pop', S.combo);
+      Sound.play('pop');
       [[elA, a, ta], [elB, b, tb]].forEach(function (x) {
         x[0].classList.add('popping');
         burst(x[1], [colorOf(ta.v), colorOf(tb.v)]);
       });
-      floatText(b, '+' + gained);
+      floatText(b, '+2');
       setTimeout(function () {
         [elA, elB].forEach(function (el) { el.remove(); tileEls.delete(el._tile.id); });
       }, POP_MS);
@@ -383,8 +366,6 @@
 
     if (L.countTiles(S.grid) === 0) {
       S.clears += 1;
-      S.score += CLEAR_BONUS;
-      renderHud();
       setTimeout(function () {
         if (!S || S.over) return;
         Sound.play('clear');
@@ -641,7 +622,6 @@
     I18n.setLang(b.dataset.lang);
     refreshLangMenu();
     closeLang();
-    if (S) showCombo();
   });
   document.addEventListener('click', function (e) {
     if (!langMenu.hidden && !e.target.closest('.lang-wrap')) closeLang();

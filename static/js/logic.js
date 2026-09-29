@@ -1,18 +1,21 @@
 /*
- * 9천성 core rules — pure functions, no DOM.
+ * 넘버 사천성 core rules — pure functions, no DOM.
  *
  * Board model: `grid[r][c]` is either null (empty) or a tile `{ id, v }`.
  * Path finding works on a virtual padded grid where row/col -1 and
  * rows/cols are the always-empty outer ring, so edge tiles can connect
  * around the outside like classic Shisen-sho.
+ *
+ * Each move has a target sum. Targets are drawn from pairs that are
+ * connectable on the board, so a move always exists (see ensureMove).
  */
 (function (root) {
   'use strict';
 
   var DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
 
-  // Single rule set: sum 9 with digits 1-8, path may turn at most once.
-  var MODE = { target: 9, maxTurns: 1, values: [1, 2, 3, 4, 5, 6, 7, 8] };
+  // Digits 1-9 on the tiles, path may turn at most once.
+  var CONFIG = { maxTurns: 1, values: [1, 2, 3, 4, 5, 6, 7, 8, 9] };
 
   function makeRng(seed) {
     if (seed == null) return Math.random;
@@ -50,31 +53,26 @@
   }
 
   /*
-   * Minimum-segment BFS. Each expansion walks a straight line through empty
-   * cells, so the level of a cell is the number of segments needed to reach
-   * it; segments - 1 = turns. Parent pointers land exactly on the corners,
-   * which is what the dotted-line renderer needs.
+   * Minimum-segment BFS from `a`. Each expansion walks a straight line through
+   * empty cells, so a cell's level is the number of segments needed to reach
+   * it (segments - 1 = turns). Parent pointers land exactly on the corners.
    *
-   * Returns the list of points [start, corner..., end] in padded-grid
-   * coordinates (row/col may be -1 or rows/cols), or null.
+   * With `b` set, returns the path [a, corner..., b] (padded coordinates) or
+   * null. Without `b`, returns every tile position reachable from `a`.
    */
-  function findPath(grid, a, b, maxTurns) {
-    if (a.r === b.r && a.c === b.c) return null;
-    var rows = rowsOf(grid);
-    var cols = colsOf(grid);
-    var W = cols + 2;
-    var H = rows + 2;
+  function search(grid, a, b, maxTurns) {
+    var W = colsOf(grid) + 2;
+    var H = rowsOf(grid) + 2;
     var key = function (r, c) { return (r + 1) * W + (c + 1); };
-    var seg = new Int8Array(W * H).fill(-1);
+    var seen = new Uint8Array(W * H);
     var parent = new Int32Array(W * H).fill(-1);
-    var maxSeg = maxTurns + 1;
-
+    var hits = b ? null : [];
     var startK = key(a.r, a.c);
-    var endK = key(b.r, b.c);
-    seg[startK] = 0;
+    var endK = b ? key(b.r, b.c) : -1;
+    seen[startK] = 1;
     var frontier = [[a.r, a.c]];
 
-    for (var s = 1; s <= maxSeg && frontier.length; s++) {
+    for (var s = 1; s <= maxTurns + 1 && frontier.length; s++) {
       var next = [];
       for (var i = 0; i < frontier.length; i++) {
         var fr = frontier[i][0];
@@ -89,9 +87,12 @@
               parent[k] = fk;
               return buildPath(parent, k, startK, W);
             }
-            if (!isEmpty(grid, r, c)) break;
-            if (seg[k] === -1) {
-              seg[k] = s;
+            if (!isEmpty(grid, r, c)) {
+              if (hits && !seen[k]) { seen[k] = 1; hits.push({ r: r, c: c }); }
+              break;
+            }
+            if (!seen[k]) {
+              seen[k] = 1;
               parent[k] = fk;
               next.push([r, c]);
             }
@@ -102,7 +103,16 @@
       }
       frontier = next;
     }
-    return null;
+    return hits;
+  }
+
+  function findPath(grid, a, b, maxTurns) {
+    if (a.r === b.r && a.c === b.c) return null;
+    return search(grid, a, b, maxTurns);
+  }
+
+  function reachableFrom(grid, a, maxTurns) {
+    return search(grid, a, null, maxTurns);
   }
 
   function buildPath(parent, k, startK, W) {
@@ -126,106 +136,123 @@
   }
 
   /*
-   * Collect connectable pairs whose values sum to `target`.
-   * `limit` stops early (1 = "is there any move?").
-   * When `target` is null any two tiles count (used by the swap fix).
+   * Connectable pairs whose values sum to `target` (any sum when null).
+   * One BFS per tile. `limit` stops early (1 = "is there any move?").
    */
   function findPairs(grid, target, maxTurns, limit) {
     var pos = tilePositions(grid);
+    var cols = colsOf(grid);
     var out = [];
     for (var i = 0; i < pos.length; i++) {
       var p = pos[i];
       var pv = grid[p.r][p.c].v;
-      for (var j = i + 1; j < pos.length; j++) {
-        var q = pos[j];
+      var reach = reachableFrom(grid, p, maxTurns);
+      for (var j = 0; j < reach.length; j++) {
+        var q = reach[j];
+        if (q.r * cols + q.c <= p.r * cols + p.c) continue; // each pair once
         if (target != null && pv + grid[q.r][q.c].v !== target) continue;
-        var path = findPath(grid, p, q, maxTurns);
-        if (path) {
-          out.push({ a: p, b: q, path: path });
-          if (limit && out.length >= limit) return out;
-        }
+        out.push({ a: p, b: q, path: findPath(grid, p, q, maxTurns) });
+        if (limit && out.length >= limit) return out;
       }
     }
     return out;
   }
 
-  function hasMove(grid, mode) {
-    return findPairs(grid, mode.target, mode.maxTurns, 1).length > 0;
+  function hasMove(grid, target, maxTurns) {
+    return findPairs(grid, target, maxTurns, 1).length > 0;
   }
 
-  /* Balanced deck: every pair type appears equally often (6 each for 24 pairs). */
-  function makeDeck(pairCount, mode, rng) {
-    var types = [];
-    mode.values.forEach(function (v) {
-      var w = mode.target - v;
-      if (v < w && mode.values.indexOf(w) !== -1) types.push([v, w]);
-    });
-    var deck = [];
-    for (var i = 0; i < pairCount; i++) {
-      var t = types[i % types.length];
-      deck.push(t[0], t[1]);
+  /* Pick the next target: the sum of a random connectable pair. */
+  function pickTarget(grid, maxTurns, rng, avoid) {
+    rng = rng || Math.random;
+    var pos = shuffleInPlace(tilePositions(grid), rng);
+    var fallback = null;
+    for (var i = 0; i < pos.length; i++) {
+      var reach = reachableFrom(grid, pos[i], maxTurns);
+      if (!reach.length) continue;
+      var q = reach[Math.floor(rng() * reach.length)];
+      var sum = grid[pos[i].r][pos[i].c].v + grid[q.r][q.c].v;
+      if (sum !== avoid) return sum;
+      if (fallback == null) fallback = sum;
+      if (i > 8) break;
     }
+    return fallback;
+  }
+
+  /* Roughly even spread of each digit (112 tiles → 12-13 of each). */
+  function makeDeck(count, values, rng) {
+    var deck = [];
+    for (var i = 0; i < count; i++) deck.push(values[i % values.length]);
     return shuffleInPlace(deck, rng);
   }
 
   var nextId = 1;
 
-  function createBoard(rows, cols, mode, opts) {
+  function createBoard(rows, cols, opts) {
     opts = opts || {};
     var rng = opts.rng || Math.random;
-    var minPairs = opts.minPairs || 1;
-    var best = null;
-    var bestCount = -1;
-    for (var attempt = 0; attempt < 200; attempt++) {
-      var deck = makeDeck((rows * cols) / 2, mode, rng);
+    var cfg = opts.config || CONFIG;
+    for (;;) {
+      var deck = makeDeck(rows * cols, cfg.values, rng);
       var grid = [];
       for (var r = 0; r < rows; r++) {
         var row = [];
         for (var c = 0; c < cols; c++) row.push({ id: nextId++, v: deck[r * cols + c] });
         grid.push(row);
       }
-      var n = findPairs(grid, mode.target, mode.maxTurns, minPairs).length;
-      if (n >= minPairs) return grid;
-      if (n > bestCount) { best = grid; bestCount = n; }
+      if (hasMove(grid, null, cfg.maxTurns)) return grid;
     }
-    if (bestCount < 1) ensureMove(best, mode, rng);
-    return best;
   }
 
   /*
-   * Stuck handling from the spec:
+   * Make sure a pair summing to `target` can be connected. Mutates `grid`.
    *  1) up to 10 position-only shuffles of the remaining tiles,
-   *  2) otherwise pick two connectable cells p, q and swap q with a tile
-   *     holding (target - p) so pair counts stay balanced.
-   * Mutates `grid`. Returns 'ok' | 'shuffled' | 'fixed' | 'empty'.
+   *  2) otherwise move two tiles x + y = target onto a connectable pair of cells.
+   * Tile values never change, only positions.
+   * Returns 'ok' | 'shuffled' | 'fixed' | 'impossible' | 'empty'.
+   * 'impossible' means no two remaining tiles add up to `target`.
    */
-  function ensureMove(grid, mode, rng) {
+  function ensureMove(grid, target, maxTurns, rng) {
     rng = rng || Math.random;
     var pos = tilePositions(grid);
     if (pos.length === 0) return 'empty';
-    if (hasMove(grid, mode)) return 'ok';
+    if (hasMove(grid, target, maxTurns)) return 'ok';
+
+    var xy = findValuePair(grid, pos, target);
+    if (!xy) return 'impossible';
 
     for (var i = 0; i < 10; i++) {
       shuffleTiles(grid, pos, rng);
-      if (hasMove(grid, mode)) return 'shuffled';
+      if (hasMove(grid, target, maxTurns)) return 'shuffled';
     }
 
-    var cand = findPairs(grid, null, mode.maxTurns, 1)[0];
-    if (!cand) return 'shuffled';
-    var p = cand.a;
-    var q = cand.b;
-    var want = mode.target - grid[p.r][p.c].v;
-    for (var j = 0; j < pos.length; j++) {
-      var t = pos[j];
-      if (t.r === p.r && t.c === p.c) continue;
-      if (grid[t.r][t.c].v === want) {
-        var tmp = grid[q.r][q.c];
-        grid[q.r][q.c] = grid[t.r][t.c];
-        grid[t.r][t.c] = tmp;
-        return 'fixed';
-      }
+    var cells = findPairs(grid, null, maxTurns, 1)[0];
+    if (!cells) return 'shuffled';
+    xy = findValuePair(grid, pos, target);
+    var px = xy[0];
+    var py = xy[1];
+    swap(grid, cells.a, px);
+    if (py.r === cells.a.r && py.c === cells.a.c) py = px;
+    swap(grid, cells.b, py);
+    return 'fixed';
+  }
+
+  function findValuePair(grid, pos, target) {
+    var byVal = {};
+    for (var i = 0; i < pos.length; i++) {
+      var v = grid[pos[i].r][pos[i].c].v;
+      var w = target - v;
+      var partner = byVal[w];
+      if (partner && partner.length) return [partner[0], pos[i]];
+      (byVal[v] = byVal[v] || []).push(pos[i]);
     }
-    return 'shuffled';
+    return null;
+  }
+
+  function swap(grid, p, q) {
+    var tmp = grid[p.r][p.c];
+    grid[p.r][p.c] = grid[q.r][q.c];
+    grid[q.r][q.c] = tmp;
   }
 
   function shuffleTiles(grid, pos, rng) {
@@ -248,11 +275,13 @@
   function countTiles(grid) { return tilePositions(grid).length; }
 
   var api = {
-    MODE: MODE,
+    CONFIG: CONFIG,
     makeRng: makeRng,
     findPath: findPath,
+    reachableFrom: reachableFrom,
     findPairs: findPairs,
     hasMove: hasMove,
+    pickTarget: pickTarget,
     makeDeck: makeDeck,
     createBoard: createBoard,
     ensureMove: ensureMove,
@@ -262,5 +291,5 @@
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  else root.NineLogic = api;
+  else root.NumberLogic = api;
 })(this);

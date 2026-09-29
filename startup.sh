@@ -1,5 +1,5 @@
 #!/bin/bash
-# 9천성 기동 스크립트 (Ubuntu)
+# 넘버 사천성 기동 스크립트 (Ubuntu)
 #
 #   ./startup.sh              # git pull → 의존성 → 기존 프로세스 종료 → 서버 기동 (포트 15004)
 #   ./startup.sh --no-pull    # git pull 없이 재기동

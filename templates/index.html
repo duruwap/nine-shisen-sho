@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#FFF8F0">
-  <meta name="description" content="합이 9인 두 패를 꺾인 선으로 이어 팡! 2분 동안 최대한 많이 터뜨리기">
-  <title>9천성 · Nine Link</title>
+  <meta name="description" content="목표 숫자를 만드는 두 패를 꺾인 선으로 이어 팡! 2분 동안 최대한 많이 지우기">
+  <title>넘버 사천성</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='24' height='24' rx='7' fill='%23FFB5A7'/%3E%3Crect x='36' y='36' width='24' height='24' rx='7' fill='%23A0C4FF'/%3E%3Cpath d='M16 28v20h20' fill='none' stroke='%23555' stroke-width='4' stroke-dasharray='5 4' stroke-linecap='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <script>
     // Apply the saved theme before first paint.
-    try { var t = localStorage.getItem('nine.theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+    try { var t = localStorage.getItem('numshisen.theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
   </script>
 </head>
 <body>
@@ -37,12 +37,14 @@
       <svg class="logo" viewBox="0 0 120 120" aria-hidden="true">
         <rect x="10" y="10" width="44" height="44" rx="12" class="logo-a"/>
         <rect x="66" y="66" width="44" height="44" rx="12" class="logo-b"/>
-        <text x="32" y="42" class="logo-num">4</text>
+        <text x="32" y="42" class="logo-num">7</text>
         <text x="88" y="98" class="logo-num">5</text>
         <path d="M32 54 V88 H66" class="logo-path"/>
+        <circle cx="88" cy="32" r="22" class="logo-target"/>
+        <text x="88" y="41" class="logo-num logo-target-num">12</text>
       </svg>
-      <h1 class="title"><span data-i18n="title">9천성</span></h1>
-      <p class="subtitle" data-i18n="tagline">합이 9인 두 패를 꺾인 선으로 이어 팡!</p>
+      <h1 class="title"><span data-i18n="title">넘버 사천성</span></h1>
+      <p class="subtitle" data-i18n="tagline">목표 숫자를 만드는 두 패를 이어 팡!</p>
 
       <button class="primary-btn" id="btn-start" data-i18n="start">시작</button>
       <p class="best"><span data-i18n="best">최고기록</span> <b id="best-score">0</b></p>
@@ -54,6 +56,13 @@
         <div class="timebar"><div class="timebar-fill" id="time-fill"></div></div>
         <div class="hud-row">
           <div class="hud-time"><b id="time-text">120</b><small data-i18n="sec">초</small></div>
+          <div class="targets" id="targets" aria-live="polite">
+            <div class="target-now"><small data-i18n="target">목표</small><b id="target-0"></b></div>
+            <div class="target-next" aria-hidden="true">
+              <span class="target-chev">›</span><b id="target-1"></b>
+              <span class="target-chev">›</span><b id="target-2"></b>
+            </div>
+          </div>
           <div class="hud-right">
             <div class="hud-score"><small data-i18n="score">점수</small><b id="score-text">0</b></div>
             <button class="icon-btn pause-btn" id="btn-pause" data-i18n-title="pause">⏸</button>
@@ -83,10 +92,11 @@
   <!-- Rule card shown for 3s before the first game -->
   <div class="overlay" id="rule-card" hidden>
     <div class="card rule-card">
+      <div class="rule-target" aria-hidden="true"><b>9</b></div>
       <div class="rule-demo" aria-hidden="true">
         <span class="chip v4">4</span><span class="rule-dots"></span><span class="chip v5">5</span>
       </div>
-      <p data-i18n-html="ruleCard">합이 <b>9</b>인 두 패를<br>최대 2번 꺾이는 선으로 이으면 팡!</p>
+      <p data-i18n-html="ruleCard">두 패의 합이 위의 <b>목표 숫자</b>가 되게<br>최대 <b>1번</b> 꺾이는 선으로 이으면 팡!</p>
       <div class="rule-countdown" id="rule-countdown">3</div>
     </div>
   </div>

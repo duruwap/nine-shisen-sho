@@ -1,12 +1,14 @@
 (function () {
   'use strict';
 
-  var L = window.NineLogic;
+  var L = window.NumberLogic;
+  var TURNS = L.CONFIG.maxTurns;
   var t = I18n.t;
 
   var GAME_MS = 120000;
-  var PATH_MS = 250;
+  var PATH_FLASH_MS = 280; // dotted line appears instantly, then fades
   var POP_MS = 300;
+  var QUEUE = 3;           // current target + the next two
   var SHUFFLE_MS = 400;
   // Board size (tiles). Portrait uses it as-is; landscape swaps rows/cols.
   var LONG_SIDE = 14;
@@ -34,11 +36,11 @@
     Object.keys(screens).forEach(function (k) { screens[k].hidden = k !== name; });
   }
 
-  function getBest() { return Number(store.get('nine.best', '0')) || 0; }
+  function getBest() { return Number(store.get('numshisen.best', '0')) || 0; }
 
   function refreshStart() {
     $('best-score').textContent = getBest();
-    I18n.setParams({ turns: L.MODE.maxTurns });
+    I18n.setParams({ turns: TURNS });
   }
 
   // ---------- Layout ----------
@@ -146,7 +148,7 @@
     line.setAttribute('points', points.map(function (p) { var q = center(p); return q.x + ',' + q.y; }).join(' '));
     line.style.stroke = color;
     pathLayer.appendChild(line);
-    setTimeout(function () { line.remove(); }, PATH_MS + POP_MS + 50);
+    setTimeout(function () { line.remove(); }, PATH_FLASH_MS);
   }
 
   function colorOf(v) {
@@ -168,7 +170,7 @@
   var VIVID = ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#C77DFF', '#FF9F45'];
   function palette() {
     var out = VIVID.slice();
-    for (var v = 1; v <= 8; v++) out.push(colorOf(v));
+    for (var v = 1; v <= 9; v++) out.push(colorOf(v));
     return out;
   }
 
@@ -234,19 +236,53 @@
     }
   }
 
+  // ---------- Targets ----------
+  var targetEls = [$('target-0'), $('target-1'), $('target-2')];
+
+  function renderTargets(advance) {
+    targetEls.forEach(function (el, i) { el.textContent = S.targets[i] != null ? S.targets[i] : ''; });
+    if (advance) restartAnim($('targets'), 'advance', 350);
+  }
+
+  function pick(avoid) {
+    return L.pickTarget(S.grid, TURNS, Math.random, avoid);
+  }
+
+  function fillTargets() {
+    while (S.targets.length < QUEUE) S.targets.push(pick(S.targets[S.targets.length - 1]));
+  }
+
+  /*
+   * Make the current target playable: shuffle / swap tiles if needed, or, if no
+   * two remaining tiles can add up to it any more, swap in a playable target.
+   */
+  function ensureTarget() {
+    var res = L.ensureMove(S.grid, S.targets[0], TURNS);
+    if (res === 'impossible') {
+      S.targets[0] = pick(S.targets[1]);
+      restartAnim(targetEls[0], 'changed', 500);
+      res = L.ensureMove(S.grid, S.targets[0], TURNS);
+    }
+    if (res === 'shuffled' || res === 'fixed') {
+      Sound.play('shuffle');
+      toast(t('shuffling'));
+      animateShuffle();
+    }
+  }
+
   // ---------- Game flow ----------
   function newGrid(rows, cols) {
-    return L.createBoard(rows, cols, L.MODE, { minPairs: 3 });
+    return L.createBoard(rows, cols);
   }
 
   function startGame() {
     Sound.unlock();
     var landscape = wantLandscape();
     S = {
-      mode: L.MODE,
       rows: landscape ? SHORT_SIDE : LONG_SIDE,
       cols: landscape ? LONG_SIDE : SHORT_SIDE,
       grid: null,
+      targets: [],
       cell: 52,
       selected: null,
       cursor: { r: 0, c: 0 },
@@ -256,19 +292,21 @@
       running: false, paused: false, over: false
     };
     S.grid = newGrid(S.rows, S.cols);
+    fillTargets();
     clearBoardEls();
     boardEl.classList.remove('paused');
     show('game');
     layout();
     placeAll();
     renderHud();
+    renderTargets(false);
 
     var begin = function () {
       S.running = true;
       S.lastFrame = performance.now();
       requestAnimationFrame(tick);
     };
-    if (store.get('nine.seenRules', '0') !== '1') showRuleCard(begin);
+    if (store.get('numshisen.seenRules', '0') !== '1') showRuleCard(begin);
     else begin();
   }
 
@@ -286,7 +324,7 @@
       clearInterval(timer);
       card.hidden = true;
       card.onclick = null;
-      store.set('nine.seenRules', '1');
+      store.set('numshisen.seenRules', '1');
       done();
     }
     card.onclick = finish;
@@ -330,7 +368,7 @@
     var b = { r: r, c: c };
     var va = S.grid[a.r][a.c].v;
     var sum = va + tile.v;
-    var path = sum === S.mode.target ? L.findPath(S.grid, a, b, S.mode.maxTurns) : null;
+    var path = sum === S.targets[0] ? L.findPath(S.grid, a, b, TURNS) : null;
     S.selected = null;
     if (path) succeed(a, b, path);
     else fail(a, b, sum);
@@ -348,41 +386,35 @@
     S.score += 2;
     S.pairs += 1;
 
-    [elA, elB].forEach(function (el) { el.classList.add('matched'); el.classList.remove('selected'); });
+    // Pop immediately; the dotted path just flashes over it.
     drawPath(path, colorOf(ta.v));
-    placeAll();
-
+    Sound.play('pop');
+    [[elA, a], [elB, b]].forEach(function (x) {
+      x[0].classList.remove('selected');
+      x[0].classList.add('matched', 'popping');
+      burst(x[1], [colorOf(ta.v), colorOf(tb.v)]);
+    });
+    floatText(b, '+2');
     setTimeout(function () {
-      Sound.play('pop');
-      [[elA, a, ta], [elB, b, tb]].forEach(function (x) {
-        x[0].classList.add('popping');
-        burst(x[1], [colorOf(ta.v), colorOf(tb.v)]);
-      });
-      floatText(b, '+2');
-      setTimeout(function () {
-        [elA, elB].forEach(function (el) { el.remove(); tileEls.delete(el._tile.id); });
-      }, POP_MS);
-    }, PATH_MS);
+      [elA, elB].forEach(function (el) { el.remove(); tileEls.delete(el._tile.id); });
+    }, POP_MS);
 
+    S.targets.shift();
     if (L.countTiles(S.grid) === 0) {
+      // Perfect: a fresh board right away, celebrated with big confetti.
       S.clears += 1;
-      setTimeout(function () {
-        if (!S || S.over) return;
-        Sound.play('clear');
-        celebratePerfect();
-        S.grid = newGrid(S.rows, S.cols);
-        S.selected = null;
-        placeAll();
-        tileEls.forEach(function (el) { restartAnim(el, 'spin', SHUFFLE_MS); });
-      }, PATH_MS + POP_MS);
+      Sound.play('clear');
+      celebratePerfect();
+      S.grid = newGrid(S.rows, S.cols);
+      S.selected = null;
+      placeAll();
+      tileEls.forEach(function (el) { if (!el.classList.contains('matched')) restartAnim(el, 'spin', SHUFFLE_MS); });
     } else {
-      var res = L.ensureMove(S.grid, S.mode);
-      if (res === 'shuffled' || res === 'fixed') {
-        Sound.play('shuffle');
-        toast(t('shuffling'));
-        animateShuffle();
-      }
+      placeAll();
     }
+    fillTargets();
+    ensureTarget();
+    renderTargets(true);
     renderHud();
   }
 
@@ -392,7 +424,7 @@
       var el = tileEls.get(S.grid[p.r][p.c].id);
       restartAnim(el, 'shake', 220);
     });
-    if (sum !== S.mode.target) floatText(b, String(sum), 'bad');
+    if (sum !== S.targets[0]) floatText(b, String(sum), 'bad');
     placeAll();
   }
 
@@ -425,7 +457,7 @@
     S.over = true;
     S.selected = null;
     Sound.play('end');
-    if (S.score > getBest()) store.set('nine.best', String(S.score));
+    if (S.score > getBest()) store.set('numshisen.best', String(S.score));
     setTimeout(function () {
       $('r-score').textContent = S.score;
       clearBoardEls();
@@ -455,7 +487,7 @@
     g.font = '900 40px ' + font; g.fillText(t('title'), W / 2, 210);
     g.fillStyle = css('--accent'); g.font = '900 150px ' + font; g.fillText(String(S.score), W / 2, 360);
     g.fillStyle = css('--muted'); g.font = '700 26px ' + font; g.fillText(t('points'), W / 2, 450);
-    g.fillStyle = css('--muted'); g.font = '500 16px ' + font; g.fillText(location.host || 'nine.duruwap.com', W / 2, 572);
+    g.fillStyle = css('--muted'); g.font = '500 16px ' + font; if (location.host) g.fillText(location.host, W / 2, 572);
     return cv;
   }
 
@@ -473,7 +505,7 @@
     if (!S) return;
     var text = t('shareText', { score: S.score }) + ' ' + location.href;
     shareImage().toBlob(function (blob) {
-      var file = blob && typeof File === 'function' ? new File([blob], 'nine-link.png', { type: 'image/png' }) : null;
+      var file = blob && typeof File === 'function' ? new File([blob], 'number-shisen.png', { type: 'image/png' }) : null;
       if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
         navigator.share({ files: [file], text: text }).catch(function () {});
         return;
@@ -485,7 +517,7 @@
       if (blob) {
         var a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = 'nine-link.png';
+        a.download = 'number-shisen.png';
         a.click();
         setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
       }
@@ -597,7 +629,7 @@
   $('btn-theme').addEventListener('click', function () {
     var next = isDark() ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;
-    store.set('nine.theme', next);
+    store.set('numshisen.theme', next);
     refreshTheme();
   });
   if (darkMq && darkMq.addEventListener) darkMq.addEventListener('change', refreshTheme);

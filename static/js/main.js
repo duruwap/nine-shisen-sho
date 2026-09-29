@@ -326,9 +326,12 @@
     d.cur = localPoint(e);
     var x = Math.min(d.start.x, d.cur.x), y = Math.min(d.start.y, d.cur.y);
     var w = Math.abs(d.cur.x - d.start.x), h = Math.abs(d.cur.y - d.start.y);
-    selEl.style.transform = 'translate(' + x + 'px,' + y + 'px)';
-    selEl.style.width = w + 'px';
-    selEl.style.height = h + 'px';
+    // Draw line-thin drags at least 8px thick so the box stays visible (selection is unaffected).
+    var MIN = 8;
+    var bw = Math.max(w, MIN), bh = Math.max(h, MIN);
+    selEl.style.transform = 'translate(' + (x - (bw - w) / 2) + 'px,' + (y - (bh - h) / 2) + 'px)';
+    selEl.style.width = bw + 'px';
+    selEl.style.height = bh + 'px';
 
     d.rc = cellRange(d.start, d.cur);
     var stats = d.rc ? L.rectStats(S.grid, d.rc) : { sum: 0, count: 0 };

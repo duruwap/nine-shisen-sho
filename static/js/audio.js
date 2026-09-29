@@ -8,9 +8,9 @@
   var volume = 0.7;
 
   try {
-    var s = localStorage.getItem('numshisen.sound');
+    var s = localStorage.getItem('dragnum.sound');
     if (s != null) enabled = s === '1';
-    var v = localStorage.getItem('numshisen.volume');
+    var v = localStorage.getItem('dragnum.volume');
     if (v != null) volume = Math.max(0, Math.min(1, Number(v) / 100));
   } catch (e) {}
 
@@ -99,13 +99,13 @@
     get enabled() { return enabled; },
     set enabled(v) {
       enabled = !!v;
-      try { localStorage.setItem('numshisen.sound', enabled ? '1' : '0'); } catch (e) {}
+      try { localStorage.setItem('dragnum.sound', enabled ? '1' : '0'); } catch (e) {}
     },
     get volume() { return Math.round(volume * 100); },
     set volume(v) {
       volume = Math.max(0, Math.min(1, v / 100));
       if (master) master.gain.value = volume;
-      try { localStorage.setItem('numshisen.volume', String(Math.round(volume * 100))); } catch (e) {}
+      try { localStorage.setItem('dragnum.volume', String(Math.round(volume * 100))); } catch (e) {}
     }
   };
 

@@ -1,26 +1,25 @@
 (function () {
   'use strict';
 
-  var L = window.NumberLogic;
-  var TURNS = L.CONFIG.maxTurns;
+  var L = window.DragLogic;
   var t = I18n.t;
 
   var GAME_MS = 120000;
-  var PATH_FLASH_MS = 280; // dotted line appears instantly, then fades
   var POP_MS = 300;
   var QUEUE = 3;           // current target + the next two
-  var SHUFFLE_MS = 400;
-  // Board size (tiles). Portrait uses it as-is; landscape swaps rows/cols.
-  var LONG_SIDE = 14;
-  var SHORT_SIDE = 8;
-  var MAX_BOARD_W = 960;
+  // Board size (tiles) like the apple game. Portrait uses it as-is; landscape swaps.
+  var LONG_SIDE = 17;
+  var SHORT_SIDE = 10;
+  var MAX_BOARD_W = 1100;
+  var PAD = 0.35;          // board padding in cells, so drags can start just outside the tiles
 
   var $ = function (id) { return document.getElementById(id); };
   var screens = { start: $('screen-start'), game: $('screen-game'), result: $('screen-result') };
   var boardEl = $('board');
   var boardWrap = $('board-wrap');
-  var pathLayer = $('path-layer');
   var fxLayer = $('fx-layer');
+  var selEl = $('select-rect');
+  var selSum = $('select-sum');
   var hudEl = document.querySelector('.hud');
 
   var store = {
@@ -36,11 +35,10 @@
     Object.keys(screens).forEach(function (k) { screens[k].hidden = k !== name; });
   }
 
-  function getBest() { return Number(store.get('numshisen.best', '0')) || 0; }
+  function getBest() { return Number(store.get('dragnum.best', '0')) || 0; }
 
   function refreshStart() {
     $('best-score').textContent = getBest();
-    I18n.setParams({ turns: TURNS });
   }
 
   // ---------- Layout ----------
@@ -54,21 +52,19 @@
     if (landscape !== S.cols > S.rows) rotateBoard();
     var w = Math.min(boardWrap.clientWidth, MAX_BOARD_W);
     var h = boardWrap.clientHeight;
-    // Tiles + a half-cell outer ring on each side = cols + 1 cells.
-    var cell = Math.floor(Math.min(w / (S.cols + 1), h / (S.rows + 1)));
-    cell = Math.max(24, Math.min(cell, 64));
+    var cell = Math.floor(Math.min(w / (S.cols + PAD * 2), h / (S.rows + PAD * 2)));
+    cell = Math.max(20, Math.min(cell, 60));
     S.cell = cell;
     boardEl.style.setProperty('--cell', cell + 'px');
+    boardEl.style.setProperty('--pad', padPx() + 'px');
     boardEl.style.setProperty('--cols', S.cols);
     boardEl.style.setProperty('--rows', S.rows);
   }
 
   function rotateBoard() {
+    cancelDrag();
     S.grid = L.transpose(S.grid);
     var r = S.rows; S.rows = S.cols; S.cols = r;
-    var swap = function (p) { return p ? { r: p.c, c: p.r } : p; };
-    S.selected = swap(S.selected);
-    S.cursor = swap(S.cursor);
     placeAll();
   }
 
@@ -76,12 +72,9 @@
   function tileEl(tile) {
     var el = tileEls.get(tile.id);
     if (el) return el;
-    el = document.createElement('button');
+    el = document.createElement('div');
     el.className = 'tile';
-    el.type = 'button';
-    el.tabIndex = -1;
     el.innerHTML = '<span class="chip v' + tile.v + '">' + tile.v + '</span>';
-    el.setAttribute('aria-label', String(tile.v));
     el._tile = tile;
     boardEl.appendChild(el);
     tileEls.set(tile.id, el);
@@ -98,85 +91,46 @@
         el.style.gridRow = String(r + 1);
         el.style.gridColumn = String(c + 1);
         el._r = r; el._c = c;
-        el.classList.toggle('selected', !!(S.selected && S.selected.r === r && S.selected.c === c));
-        el.classList.toggle('cursor', !!(S.keyboard && S.cursor.r === r && S.cursor.c === c));
         seen.add(tile.id);
       }
     }
     tileEls.forEach(function (el, id) {
-      if (!seen.has(id) && !el.classList.contains('matched')) { el.remove(); tileEls.delete(id); }
+      if (!seen.has(id) && !el.classList.contains('popping')) { el.remove(); tileEls.delete(id); }
     });
-    updateCursorGhost();
-  }
-
-  // Keyboard cursor may sit on an empty cell; draw it with a ghost element.
-  var ghost = document.createElement('div');
-  ghost.className = 'tile cursor';
-  ghost.style.pointerEvents = 'none';
-  function updateCursorGhost() {
-    var onEmpty = S && S.keyboard && !S.grid[S.cursor.r][S.cursor.c];
-    if (onEmpty) {
-      ghost.style.gridRow = String(S.cursor.r + 1);
-      ghost.style.gridColumn = String(S.cursor.c + 1);
-      if (!ghost.parentNode) boardEl.appendChild(ghost);
-    } else if (ghost.parentNode) {
-      ghost.remove();
-    }
   }
 
   function clearBoardEls() {
     tileEls.forEach(function (el) { el.remove(); });
     tileEls.clear();
-    pathLayer.innerHTML = '';
     fxLayer.innerHTML = '';
-    if (ghost.parentNode) ghost.remove();
+    selEl.hidden = true;
   }
 
-  // Padded-grid coordinate → pixel center inside the board (ring is half a cell wide).
-  function px(i, n) {
-    var cell = S.cell;
-    if (i < 0) return cell * 0.25;
-    if (i >= n) return cell * (n + 0.75);
-    return cell * (i + 1);
-  }
-  function center(p) { return { x: px(p.c, S.cols), y: px(p.r, S.rows) }; }
-
-  function drawPath(points, color) {
-    var ns = 'http://www.w3.org/2000/svg';
-    var line = document.createElementNS(ns, 'polyline');
-    line.setAttribute('class', 'path-line');
-    line.setAttribute('points', points.map(function (p) { var q = center(p); return q.x + ',' + q.y; }).join(' '));
-    line.style.stroke = color;
-    pathLayer.appendChild(line);
-    setTimeout(function () { line.remove(); }, PATH_FLASH_MS);
+  function padPx() { return Math.round(S.cell * PAD); }
+  function center(p) {
+    return { x: padPx() + (p.c + 0.5) * S.cell, y: padPx() + (p.r + 0.5) * S.cell };
   }
 
   function colorOf(v) {
     return getComputedStyle(document.documentElement).getPropertyValue('--c' + v).trim() || '#999';
   }
 
-  function floatText(p, text, cls) {
+  function floatText(x, y, text, cls) {
     var el = document.createElement('div');
     el.className = 'float-text' + (cls ? ' ' + cls : '');
     el.textContent = text;
-    var q = center(p);
-    el.style.left = q.x + 'px';
-    el.style.top = q.y + 'px';
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
     fxLayer.appendChild(el);
     setTimeout(function () { el.remove(); }, 800);
   }
 
-  // Confetti uses the popped pair's colors plus a few vivid accents.
+  // Confetti uses the popped tiles' colors plus a few vivid accents.
   var VIVID = ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#C77DFF', '#FF9F45'];
   function palette() {
     var out = VIVID.slice();
     for (var v = 1; v <= 9; v++) out.push(colorOf(v));
     return out;
-  }
-
-  function burst(p, colors) {
-    var q = center(p);
-    Confetti.small(fxLayer, q.x, q.y, colors.concat(VIVID), S.cell / 52);
   }
 
   function celebratePerfect() {
@@ -203,25 +157,6 @@
     if (ms) setTimeout(function () { el.classList.remove(cls); }, ms);
   }
 
-  // Shuffle: FLIP each tile from its old spot to the new one with a spin.
-  function animateShuffle() {
-    var before = new Map();
-    tileEls.forEach(function (el, id) { before.set(id, el.getBoundingClientRect()); });
-    placeAll();
-    tileEls.forEach(function (el, id) {
-      var a = before.get(id);
-      if (!a || el.classList.contains('matched')) return;
-      var b = el.getBoundingClientRect();
-      el.style.transition = 'none';
-      el.style.transform = 'translate(' + (a.left - b.left) + 'px,' + (a.top - b.top) + 'px)';
-      void el.offsetWidth;
-      el.style.transition = 'transform ' + SHUFFLE_MS + 'ms cubic-bezier(.4,.1,.3,1)';
-      el.style.transform = '';
-      restartAnim(el, 'spin', SHUFFLE_MS);
-      setTimeout(function () { el.style.transition = ''; }, SHUFFLE_MS);
-    });
-  }
-
   // ---------- HUD ----------
   function renderHud() {
     var left = Math.max(0, GAME_MS - S.elapsed);
@@ -244,37 +179,35 @@
     if (advance) restartAnim($('targets'), 'advance', 350);
   }
 
-  function pick(avoid) {
-    return L.pickTarget(S.grid, TURNS, Math.random, avoid);
-  }
+  function pick(avoid) { return L.pickTarget(S.grid, Math.random, avoid); }
 
   function fillTargets() {
     while (S.targets.length < QUEUE) S.targets.push(pick(S.targets[S.targets.length - 1]));
   }
 
-  /*
-   * Make the current target playable: shuffle / swap tiles if needed, or, if no
-   * two remaining tiles can add up to it any more, swap in a playable target.
-   */
+  /* If the current target can no longer be made (tiles it needed are gone), swap in one that can. */
   function ensureTarget() {
-    var res = L.ensureMove(S.grid, S.targets[0], TURNS);
-    if (res === 'impossible') {
-      S.targets[0] = pick(S.targets[1]);
-      restartAnim(targetEls[0], 'changed', 500);
-      res = L.ensureMove(S.grid, S.targets[0], TURNS);
+    if (L.hasRect(S.grid, S.targets[0])) return;
+    S.targets[0] = pick(S.targets[1]);
+    restartAnim(targetEls[0], 'changed', 500);
+  }
+
+  function refillBoard(perfect) {
+    if (perfect) {
+      S.clears += 1;
+      Sound.play('clear');
+      celebratePerfect();
+    } else {
+      toast(t('newBoard'));
     }
-    if (res === 'shuffled' || res === 'fixed') {
-      Sound.play('shuffle');
-      toast(t('shuffling'));
-      animateShuffle();
-    }
+    S.grid = L.createBoard(S.rows, S.cols);
+    S.targets = [];
+    placeAll();
+    tileEls.forEach(function (el) { if (!el.classList.contains('popping')) restartAnim(el, 'drop-in', 450); });
+    fillTargets();
   }
 
   // ---------- Game flow ----------
-  function newGrid(rows, cols) {
-    return L.createBoard(rows, cols);
-  }
-
   function startGame() {
     Sound.unlock();
     var landscape = wantLandscape();
@@ -283,15 +216,13 @@
       cols: landscape ? LONG_SIDE : SHORT_SIDE,
       grid: null,
       targets: [],
-      cell: 52,
-      selected: null,
-      cursor: { r: 0, c: 0 },
-      keyboard: false,
-      score: 0, pairs: 0, clears: 0,
+      cell: 36,
+      drag: null,
+      score: 0, clears: 0,
       elapsed: 0, lastFrame: 0, lastSec: null,
       running: false, paused: false, over: false
     };
-    S.grid = newGrid(S.rows, S.cols);
+    S.grid = L.createBoard(S.rows, S.cols);
     fillTargets();
     clearBoardEls();
     boardEl.classList.remove('paused');
@@ -306,7 +237,7 @@
       S.lastFrame = performance.now();
       requestAnimationFrame(tick);
     };
-    if (store.get('numshisen.seenRules', '0') !== '1') showRuleCard(begin);
+    if (store.get('dragnum.seenRules', '0') !== '1') showRuleCard(begin);
     else begin();
   }
 
@@ -324,7 +255,7 @@
       clearInterval(timer);
       card.hidden = true;
       card.onclick = null;
-      store.set('numshisen.seenRules', '1');
+      store.set('dragnum.seenRules', '1');
       done();
     }
     card.onclick = finish;
@@ -348,88 +279,124 @@
 
   function canPlay() { return S && S.running && !S.paused && !S.over; }
 
-  function select(r, c) {
-    if (!canPlay()) return;
-    var tile = S.grid[r][c];
-    if (!tile) return;
-    var sel = S.selected;
-    if (!sel) {
-      S.selected = { r: r, c: c };
-      Sound.play('select');
-      placeAll();
-      return;
-    }
-    if (sel.r === r && sel.c === c) {
-      S.selected = null;
-      placeAll();
-      return;
-    }
-    var a = sel;
-    var b = { r: r, c: c };
-    var va = S.grid[a.r][a.c].v;
-    var sum = va + tile.v;
-    var path = sum === S.targets[0] ? L.findPath(S.grid, a, b, TURNS) : null;
-    S.selected = null;
-    if (path) succeed(a, b, path);
-    else fail(a, b, sum);
+  // ---------- Drag selection (apple-game style) ----------
+  // Tiles whose centers fall inside the dragged box are selected.
+  function localPoint(e) {
+    var b = boardEl.getBoundingClientRect();
+    return { x: e.clientX - b.left, y: e.clientY - b.top };
   }
 
-  function succeed(a, b, path) {
-    var ta = S.grid[a.r][a.c];
-    var tb = S.grid[b.r][b.c];
-    var elA = tileEls.get(ta.id);
-    var elB = tileEls.get(tb.id);
-    S.grid[a.r][a.c] = null;
-    S.grid[b.r][b.c] = null;
+  function cellRange(a, b) {
+    var pad = padPx(), cell = S.cell;
+    var x1 = Math.min(a.x, b.x), x2 = Math.max(a.x, b.x);
+    var y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y);
+    var rc = {
+      c1: Math.max(0, Math.ceil((x1 - pad) / cell - 0.5)),
+      c2: Math.min(S.cols - 1, Math.floor((x2 - pad) / cell - 0.5)),
+      r1: Math.max(0, Math.ceil((y1 - pad) / cell - 0.5)),
+      r2: Math.min(S.rows - 1, Math.floor((y2 - pad) / cell - 0.5))
+    };
+    return rc.c1 <= rc.c2 && rc.r1 <= rc.r2 ? rc : null;
+  }
+
+  function updateDrag(e) {
+    var d = S.drag;
+    d.cur = localPoint(e);
+    var x = Math.min(d.start.x, d.cur.x), y = Math.min(d.start.y, d.cur.y);
+    var w = Math.abs(d.cur.x - d.start.x), h = Math.abs(d.cur.y - d.start.y);
+    selEl.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+    selEl.style.width = w + 'px';
+    selEl.style.height = h + 'px';
+
+    d.rc = cellRange(d.start, d.cur);
+    var stats = d.rc ? L.rectStats(S.grid, d.rc) : { sum: 0, count: 0 };
+    d.stats = stats;
+    var ok = stats.count >= L.CONFIG.minTiles && stats.sum === S.targets[0];
+    selEl.hidden = w < 4 && h < 4;
+    selEl.classList.toggle('ok', ok);
+    selEl.classList.toggle('over', stats.sum > S.targets[0]);
+    selSum.textContent = stats.count ? stats.sum : '';
+
+    // Highlight the tiles inside the box.
+    var inSel = new Set(d.rc ? L.tilesInRect(S.grid, d.rc).map(function (p) { return S.grid[p.r][p.c].id; }) : []);
+    tileEls.forEach(function (el, id) { el.classList.toggle('in-sel', inSel.has(id)); });
+  }
+
+  function cancelDrag() {
+    if (!S) return;
+    S.drag = null;
+    selEl.hidden = true;
+    tileEls.forEach(function (el) { el.classList.remove('in-sel'); });
+  }
+
+  boardWrap.addEventListener('pointerdown', function (e) {
+    if (!canPlay() || e.button > 0) return;
+    e.preventDefault();
+    try { boardWrap.setPointerCapture(e.pointerId); } catch (err) {}
+    S.drag = { id: e.pointerId, start: localPoint(e) };
+    updateDrag(e);
+  });
+
+  boardWrap.addEventListener('pointermove', function (e) {
+    if (!S || !S.drag || S.drag.id !== e.pointerId) return;
+    if (!canPlay()) { cancelDrag(); return; }
+    updateDrag(e);
+  });
+
+  boardWrap.addEventListener('pointerup', function (e) {
+    if (!S || !S.drag || S.drag.id !== e.pointerId) return;
+    var d = S.drag;
+    cancelDrag();
+    if (!canPlay() || !d.rc || d.stats.count < L.CONFIG.minTiles) return;
+    if (d.stats.sum === S.targets[0]) succeed(d.rc);
+    else fail(d.rc, d.stats.sum);
+  });
+  boardWrap.addEventListener('pointercancel', function () { cancelDrag(); });
+
+  function succeed(rc) {
+    var cells = L.tilesInRect(S.grid, rc);
+    var colors = cells.map(function (p) { return colorOf(S.grid[p.r][p.c].v); });
+    cells.forEach(function (p) {
+      var tile = S.grid[p.r][p.c];
+      var el = tileEls.get(tile.id);
+      S.grid[p.r][p.c] = null;
+      el.classList.add('popping');
+      setTimeout(function () { el.remove(); tileEls.delete(tile.id); }, POP_MS);
+      var q = center(p);
+      Confetti.small(fxLayer, q.x, q.y, colors.concat(VIVID), S.cell / 52);
+    });
 
     // Score = number of cells cleared.
-    S.score += 2;
-    S.pairs += 1;
-
-    // Pop immediately; the dotted path just flashes over it.
-    drawPath(path, colorOf(ta.v));
+    S.score += cells.length;
     Sound.play('pop');
-    [[elA, a], [elB, b]].forEach(function (x) {
-      x[0].classList.remove('selected');
-      x[0].classList.add('matched', 'popping');
-      burst(x[1], [colorOf(ta.v), colorOf(tb.v)]);
-    });
-    floatText(b, '+2');
-    setTimeout(function () {
-      [elA, elB].forEach(function (el) { el.remove(); tileEls.delete(el._tile.id); });
-    }, POP_MS);
+    var mid = center({ r: (rc.r1 + rc.r2) / 2, c: (rc.c1 + rc.c2) / 2 });
+    floatText(mid.x, mid.y, '+' + cells.length);
 
     S.targets.shift();
-    if (L.countTiles(S.grid) === 0) {
-      // Perfect: a fresh board right away, celebrated with big confetti.
-      S.clears += 1;
-      Sound.play('clear');
-      celebratePerfect();
-      S.grid = newGrid(S.rows, S.cols);
-      S.selected = null;
-      placeAll();
-      tileEls.forEach(function (el) { if (!el.classList.contains('matched')) restartAnim(el, 'spin', SHUFFLE_MS); });
-    } else {
-      placeAll();
+    var left = L.countTiles(S.grid);
+    if (left === 0) refillBoard(true);
+    else if (left < L.CONFIG.minTiles) refillBoard(false);
+    else {
+      fillTargets();
+      ensureTarget();
     }
-    fillTargets();
-    ensureTarget();
     renderTargets(true);
     renderHud();
   }
 
-  function fail(a, b, sum) {
+  function fail(rc, sum) {
     Sound.play('fail');
-    [a, b].forEach(function (p) {
-      var el = tileEls.get(S.grid[p.r][p.c].id);
-      restartAnim(el, 'shake', 220);
+    L.tilesInRect(S.grid, rc).forEach(function (p) {
+      restartAnim(tileEls.get(S.grid[p.r][p.c].id), 'shake', 220);
     });
-    if (sum !== S.targets[0]) floatText(b, String(sum), 'bad');
-    placeAll();
+    var mid = center({ r: (rc.r1 + rc.r2) / 2, c: (rc.c1 + rc.c2) / 2 });
+    floatText(mid.x, mid.y, String(sum), 'bad');
   }
 
+  // ---------- Pause / end ----------
   function pause() {
     if (!canPlay()) return;
+    cancelDrag();
     S.paused = true;
     boardEl.classList.add('paused');
     $('pause-overlay').hidden = false;
@@ -453,11 +420,11 @@
   }
 
   function endGame() {
+    cancelDrag();
     S.running = false;
     S.over = true;
-    S.selected = null;
     Sound.play('end');
-    if (S.score > getBest()) store.set('numshisen.best', String(S.score));
+    if (S.score > getBest()) store.set('dragnum.best', String(S.score));
     setTimeout(function () {
       $('r-score').textContent = S.score;
       clearBoardEls();
@@ -474,20 +441,21 @@
     var css = function (v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); };
     g.fillStyle = css('--bg'); g.fillRect(0, 0, W, H);
     var font = getComputedStyle(document.body).fontFamily;
-    // Mini logo chips
-    [[4, '--c4', 190], [5, '--c5', 330]].forEach(function (x) {
+    // Mini logo: two chips inside a dashed selection box
+    [[4, '--c4', 200], [6, '--c6', 320]].forEach(function (x) {
       g.fillStyle = css(x[1]);
       roundRect(g, x[2], 70, 80, 80, 18); g.fill();
       g.fillStyle = '#3B3530'; g.font = '900 44px ' + font; g.textAlign = 'center'; g.textBaseline = 'middle';
       g.fillText(String(x[0]), x[2] + 40, 112);
     });
-    g.strokeStyle = css('--text'); g.lineWidth = 6; g.setLineDash([3, 12]); g.lineCap = 'round';
-    g.beginPath(); g.moveTo(270, 110); g.lineTo(330, 110); g.stroke(); g.setLineDash([]);
+    g.strokeStyle = css('--accent'); g.lineWidth = 5; g.setLineDash([10, 8]);
+    roundRect(g, 184, 54, 232, 112, 22); g.stroke(); g.setLineDash([]);
     g.fillStyle = css('--text'); g.textAlign = 'center';
-    g.font = '900 40px ' + font; g.fillText(t('title'), W / 2, 210);
-    g.fillStyle = css('--accent'); g.font = '900 150px ' + font; g.fillText(String(S.score), W / 2, 360);
-    g.fillStyle = css('--muted'); g.font = '700 26px ' + font; g.fillText(t('points'), W / 2, 450);
-    g.fillStyle = css('--muted'); g.font = '500 16px ' + font; if (location.host) g.fillText(location.host, W / 2, 572);
+    g.font = '900 40px ' + font; g.fillText(t('title'), W / 2, 220);
+    g.fillStyle = css('--accent'); g.font = '900 150px ' + font; g.fillText(String(S.score), W / 2, 365);
+    g.fillStyle = css('--muted'); g.font = '700 26px ' + font; g.fillText(t('points'), W / 2, 455);
+    g.font = '500 16px ' + font;
+    if (location.host) g.fillText(location.host, W / 2, 572);
     return cv;
   }
 
@@ -505,7 +473,7 @@
     if (!S) return;
     var text = t('shareText', { score: S.score }) + ' ' + location.href;
     shareImage().toBlob(function (blob) {
-      var file = blob && typeof File === 'function' ? new File([blob], 'number-shisen.png', { type: 'image/png' }) : null;
+      var file = blob && typeof File === 'function' ? new File([blob], 'drag-number.png', { type: 'image/png' }) : null;
       if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
         navigator.share({ files: [file], text: text }).catch(function () {});
         return;
@@ -517,7 +485,7 @@
       if (blob) {
         var a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = 'number-shisen.png';
+        a.download = 'drag-number.png';
         a.click();
         setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
       }
@@ -526,44 +494,13 @@
     }, 'image/png');
   }
 
-  // ---------- Input ----------
-  boardEl.addEventListener('click', function (e) {
-    var el = e.target.closest('.tile');
-    if (!el || el === ghost || el.classList.contains('matched')) return;
-    if (S) {
-      S.keyboard = false;
-      S.cursor = { r: el._r, c: el._c };
-    }
-    select(el._r, el._c);
-  });
-
+  // ---------- Global input ----------
   document.addEventListener('keydown', function (e) {
-    var gameOn = S && !screens.game.hidden;
-    if (e.key === 'Escape') {
-      var open = document.querySelector('#rules-modal:not([hidden]), #settings-modal:not([hidden])');
-      if (open) { open.hidden = true; return; }
-      if (!$('lang-menu').hidden) { closeLang(); return; }
-      if (gameOn) { if (S.paused) resume(); else pause(); }
-      return;
-    }
-    if (!gameOn || !canPlay()) return;
-    var dir = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] }[e.key];
-    if (dir) {
-      e.preventDefault();
-      if (S.keyboard) {
-        S.cursor = {
-          r: Math.max(0, Math.min(S.rows - 1, S.cursor.r + dir[0])),
-          c: Math.max(0, Math.min(S.cols - 1, S.cursor.c + dir[1]))
-        };
-      }
-      S.keyboard = true;
-      placeAll();
-    } else if (e.key === ' ' || e.key === 'Enter') {
-      e.preventDefault();
-      S.keyboard = true;
-      select(S.cursor.r, S.cursor.c);
-      placeAll();
-    }
+    if (e.key !== 'Escape') return;
+    var open = document.querySelector('#rules-modal:not([hidden]), #settings-modal:not([hidden])');
+    if (open) { open.hidden = true; return; }
+    if (!$('lang-menu').hidden) { closeLang(); return; }
+    if (S && !screens.game.hidden) { if (S.paused) resume(); else pause(); }
   });
 
   document.addEventListener('visibilitychange', function () {
@@ -573,14 +510,8 @@
   window.addEventListener('resize', function () { if (S && !S.over) { layout(); placeAll(); } });
   if (window.ResizeObserver) new ResizeObserver(function () { if (S && !S.over) layout(); }).observe(boardWrap);
 
-  // Prevent pinch/double-tap zoom on iOS where user-scalable is ignored.
+  // Prevent pinch zoom on iOS where user-scalable is ignored.
   document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
-  var lastTouch = 0;
-  document.addEventListener('touchend', function (e) {
-    var now = Date.now();
-    if (now - lastTouch < 300 && e.target.closest('.board')) e.preventDefault();
-    lastTouch = now;
-  }, { passive: false });
 
   // ---------- Buttons ----------
   $('btn-start').addEventListener('click', startGame);
@@ -629,7 +560,7 @@
   $('btn-theme').addEventListener('click', function () {
     var next = isDark() ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;
-    store.set('numshisen.theme', next);
+    store.set('dragnum.theme', next);
     refreshTheme();
   });
   if (darkMq && darkMq.addEventListener) darkMq.addEventListener('change', refreshTheme);

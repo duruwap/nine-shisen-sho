@@ -298,21 +298,25 @@
   function canPlay() { return S && S.running && !S.paused && !S.over; }
 
   // ---------- Drag selection (apple-game style) ----------
-  // Tiles whose centers fall inside the dragged box are selected.
+  // A tile is selected as soon as the dragged box overlaps any part of it
+  // (the visible chip, not the gap around it).
   function localPoint(e) {
     var b = boardEl.getBoundingClientRect();
     return { x: e.clientX - b.left, y: e.clientY - b.top };
   }
 
+  function chipInset() { return Math.max(2, S.cell * 0.05); } // matches .tile padding
+
   function cellRange(a, b) {
-    var pad = padPx(), cell = S.cell;
+    var pad = padPx(), cell = S.cell, inset = chipInset();
     var x1 = Math.min(a.x, b.x), x2 = Math.max(a.x, b.x);
     var y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y);
+    // Chip i spans [pad + i*cell + inset, pad + (i+1)*cell - inset].
     var rc = {
-      c1: Math.max(0, Math.ceil((x1 - pad) / cell - 0.5)),
-      c2: Math.min(S.cols - 1, Math.floor((x2 - pad) / cell - 0.5)),
-      r1: Math.max(0, Math.ceil((y1 - pad) / cell - 0.5)),
-      r2: Math.min(S.rows - 1, Math.floor((y2 - pad) / cell - 0.5))
+      c1: Math.max(0, Math.floor((x1 - pad + inset) / cell)),
+      c2: Math.min(S.cols - 1, Math.ceil((x2 - pad - inset) / cell) - 1),
+      r1: Math.max(0, Math.floor((y1 - pad + inset) / cell)),
+      r2: Math.min(S.rows - 1, Math.ceil((y2 - pad - inset) / cell) - 1)
     };
     return rc.c1 <= rc.c2 && rc.r1 <= rc.r2 ? rc : null;
   }

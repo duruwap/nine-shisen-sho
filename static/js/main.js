@@ -185,11 +185,29 @@
     while (S.targets.length < QUEUE) S.targets.push(pick(S.targets[S.targets.length - 1]));
   }
 
-  /* If the current target can no longer be made (tiles it needed are gone), swap in one that can. */
-  function ensureTarget() {
-    if (L.hasRect(S.grid, S.targets[0])) return;
-    S.targets[0] = pick(S.targets[1]);
-    restartAnim(targetEls[0], 'changed', 500);
+  /*
+   * Tiles only ever disappear, so a target that no rectangle can make now can
+   * never be made later. Replace every such target in the queue (current and
+   * upcoming) with one that can be made; returns the replaced indices.
+   */
+  function fixTargets() {
+    var changed = [];
+    for (var i = 0; i < S.targets.length; i++) {
+      if (L.hasRect(S.grid, S.targets[i])) continue;
+      S.targets[i] = pick(i > 0 ? S.targets[i - 1] : S.targets[1]);
+      changed.push(i);
+    }
+    return changed;
+  }
+
+  var noticeTimer = 0;
+  function notice(msg) {
+    var el = $('notice');
+    el.textContent = msg;
+    el.hidden = false;
+    restartAnim(el, 'show');
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(function () { el.hidden = true; }, 2200);
   }
 
   function refillBoard(perfect) {
@@ -373,14 +391,20 @@
     floatText(mid.x, mid.y, '+' + cells.length);
 
     S.targets.shift();
+    var changed = [];
     var left = L.countTiles(S.grid);
     if (left === 0) refillBoard(true);
     else if (left < L.CONFIG.minTiles) refillBoard(false);
     else {
       fillTargets();
-      ensureTarget();
+      changed = fixTargets();
     }
     renderTargets(true);
+    if (changed.length) {
+      changed.forEach(function (i) { restartAnim(targetEls[i], 'changed', 600); });
+      Sound.play('shuffle');
+      notice(t('noCombo'));
+    }
     renderHud();
   }
 

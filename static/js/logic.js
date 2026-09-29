@@ -146,24 +146,26 @@
   }
 
   /*
-   * Next target: a sum some rectangle makes right now, weighted by how many
-   * small rectangles make it, preferring targetMin..targetMax and a different
-   * value from `avoid`. Returns null when fewer than minTiles tiles remain.
+   * Next target: a sum some small rectangle (2-3 tiles) makes right now,
+   * weighted by how many make it, preferring targetMin..targetMax and a value
+   * different from `avoid`. Returns null when fewer than minTiles tiles remain.
    */
   function pickTarget(grid, rng, avoid, cfg) {
     rng = rng || Math.random;
     cfg = cfg || CONFIG;
     var counts = sumCounts(grid, cfg.minTiles, cfg.weightTiles);
     var sums = Object.keys(counts).map(Number);
-    if (!sums.some(function (s) { return s >= cfg.targetMin && s <= cfg.targetMax; })) {
-      counts = sumCounts(grid, cfg.minTiles); // sparse board: any rectangle size
-      sums = Object.keys(counts).map(Number);
+    if (!sums.length) {
+      // Only big rectangles left: offer the smallest (easiest) sums.
+      counts = sumCounts(grid, cfg.minTiles);
+      sums = Object.keys(counts).map(Number).sort(function (a, b) { return a - b; }).slice(0, 3);
     }
     if (!sums.length) return null;
+    // In range and new > any new value (late game) > in range > anything.
     var tiers = [
       sums.filter(function (s) { return s >= cfg.targetMin && s <= cfg.targetMax && s !== avoid; }),
-      sums.filter(function (s) { return s >= cfg.targetMin && s <= cfg.targetMax; }),
       sums.filter(function (s) { return s !== avoid; }),
+      sums.filter(function (s) { return s >= cfg.targetMin && s <= cfg.targetMax; }),
       sums
     ];
     var pool = tiers.filter(function (t) { return t.length; })[0];

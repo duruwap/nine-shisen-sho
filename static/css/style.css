@@ -126,7 +126,7 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 /* ---------- HUD ---------- */
 #screen-game { justify-content: flex-start; gap: 8px; padding-top: calc(52px + env(safe-area-inset-top)); }
-.hud { width: 100%; max-width: 960px; }
+.hud { width: 100%; max-width: 960px; position: relative; }
 .timebar { height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
 .timebar-fill { height: 100%; width: 100%; background: var(--accent); border-radius: 5px; transform-origin: left; transition: background .3s; }
 .hud.urgent .timebar-fill { background: var(--danger); }
@@ -162,7 +162,28 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .target-chev { color: var(--muted); font-weight: 900; font-size: 14px; }
 .targets.advance .target-now { animation: target-in .35s cubic-bezier(.3, 1.6, .5, 1); }
 .targets.advance .target-next { animation: queue-shift .3s ease-out; }
-.target-now b.changed { animation: target-changed .5s ease; }
+.target-now b.changed, .target-next b.changed { animation: target-changed .6s ease; }
+.target-next b.changed { box-shadow: inset 0 0 0 2px var(--accent); }
+
+/* "No combination left" notice, just under the target queue */
+.notice {
+  position: absolute; left: 50%; top: calc(100% + 6px); z-index: 20;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px); padding: 7px 14px; border-radius: 16px;
+  background: var(--text); color: var(--bg);
+  font-size: 13px; font-weight: 700; text-align: center; white-space: nowrap;
+  box-shadow: var(--shadow); pointer-events: none;
+}
+.notice::before {
+  content: ""; position: absolute; left: 50%; top: -5px; width: 10px; height: 10px;
+  background: inherit; transform: translateX(-50%) rotate(45deg);
+}
+.notice.show { animation: notice-in 2.2s ease forwards; }
+@keyframes notice-in {
+  0% { opacity: 0; transform: translate(-50%, -6px); }
+  10%, 85% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, 0); }
+}
 @keyframes target-in { 0% { transform: scale(.6); } 100% { transform: none; } }
 @keyframes queue-shift { from { transform: translateX(18px); opacity: .3; } }
 @keyframes target-changed { 0%, 100% { transform: none; } 30% { transform: rotateX(90deg); } 60% { transform: none; } }

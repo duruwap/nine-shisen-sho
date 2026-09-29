@@ -64,6 +64,16 @@ test('pickTarget names a playable sum, in range while the board is full', () => 
   }
   assert.equal(L.pickTarget(g(['5..', '...']), rng), null); // one tile left
   assert.equal(L.pickTarget(g(['9.', '.9']), rng), 18);     // only sum left, out of range
+  // Late game: prefer a new value over repeating the previous one, even out of range.
+  assert.equal(L.pickTarget(g(['96', '..']), rng, 15, { minTiles: 2, targetMin: 5, targetMax: 15, weightTiles: 3 }), 15);
+  assert.notEqual(L.pickTarget(g(['978', '...']), rng, 15), 15);
+  // Sparse late board never jumps to huge sums: at most three tiles' worth.
+  for (let i = 0; i < 30; i++) {
+    const b = L.createBoard(17, 10, { rng });
+    b.forEach((row) => row.forEach((_, c) => { if (rng() < 0.93) row[c] = null; }));
+    const x = L.pickTarget(b, rng);
+    if (x != null) { assert.ok(x <= 27, `target ${x}`); assert.ok(L.hasRect(b, x)); }
+  }
 });
 
 test('a whole game with rolling targets always has a move until < 2 tiles remain', () => {

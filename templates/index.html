@@ -55,7 +55,10 @@
         <div class="hud-row">
           <div class="hud-time"><b id="time-text">120</b><small data-i18n="sec">초</small></div>
           <div class="hud-combo" id="combo-text"></div>
-          <div class="hud-score"><small data-i18n="score">점수</small><b id="score-text">0</b></div>
+          <div class="hud-right">
+            <div class="hud-score"><small data-i18n="score">점수</small><b id="score-text">0</b></div>
+            <button class="icon-btn pause-btn" id="btn-pause" data-i18n-title="pause">⏸</button>
+          </div>
         </div>
       </div>
 
@@ -64,10 +67,6 @@
           <svg class="path-layer" id="path-layer" aria-hidden="true"></svg>
           <div class="fx-layer" id="fx-layer" aria-hidden="true"></div>
         </div>
-      </div>
-
-      <div class="controls">
-        <button class="ctrl-btn" id="btn-pause">⏸ <span data-i18n="pause">일시정지</span></button>
       </div>
     </section>
 

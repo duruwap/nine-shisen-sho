@@ -10,6 +10,10 @@
   var PATH_MS = 250;
   var POP_MS = 300;
   var SHUFFLE_MS = 400;
+  // Board size (tiles). Portrait uses it as-is; landscape swaps rows/cols.
+  var LONG_SIDE = 14;
+  var SHORT_SIDE = 8;
+  var MAX_BOARD_W = 960;
 
   var $ = function (id) { return document.getElementById(id); };
   var screens = { start: $('screen-start'), game: $('screen-game'), result: $('screen-result') };
@@ -48,11 +52,11 @@
     if (!S) return;
     var landscape = wantLandscape();
     if (landscape !== S.cols > S.rows) rotateBoard();
-    var w = Math.min(boardWrap.clientWidth, 720);
+    var w = Math.min(boardWrap.clientWidth, MAX_BOARD_W);
     var h = boardWrap.clientHeight;
     // Tiles + a half-cell outer ring on each side = cols + 1 cells.
     var cell = Math.floor(Math.min(w / (S.cols + 1), h / (S.rows + 1)));
-    cell = Math.max(34, Math.min(cell, 80));
+    cell = Math.max(24, Math.min(cell, 64));
     S.cell = cell;
     boardEl.style.setProperty('--cell', cell + 'px');
     boardEl.style.setProperty('--cols', S.cols);
@@ -252,8 +256,8 @@
     var landscape = wantLandscape();
     S = {
       mode: L.MODE,
-      rows: landscape ? 6 : 8,
-      cols: landscape ? 8 : 6,
+      rows: landscape ? SHORT_SIDE : LONG_SIDE,
+      cols: landscape ? LONG_SIDE : SHORT_SIDE,
       grid: null,
       cell: 52,
       selected: null,

@@ -136,3 +136,23 @@ test('transpose swaps dimensions and keeps tiles', () => {
   assert.equal(t[0].length, 2);
   assert.equal(t[2][1].v, 6);
 });
+
+test('large 14x8 board: balanced deck and always clearable', () => {
+  const deck = L.makeDeck(56, M, L.makeRng(3));
+  for (const v of [1, 2, 3, 4, 5, 6, 7, 8]) assert.equal(deck.filter((x) => x === v).length, 14);
+  const rng = L.makeRng(99);
+  for (let game = 0; game < 15; game++) {
+    const grid = L.createBoard(14, 8, M, { rng, minPairs: 3 });
+    assert.ok(L.findPairs(grid, 9, 1, 3).length >= 3);
+    let steps = 0;
+    while (L.countTiles(grid) > 0) {
+      L.ensureMove(grid, M, rng);
+      const [m] = L.findPairs(grid, M.target, M.maxTurns, 1);
+      assert.ok(m);
+      grid[m.a.r][m.a.c] = null;
+      grid[m.b.r][m.b.c] = null;
+      steps++;
+    }
+    assert.equal(steps, 56);
+  }
+});

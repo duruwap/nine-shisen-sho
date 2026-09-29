@@ -11,10 +11,8 @@
 
   var DIRS = [[-1, 0], [0, 1], [1, 0], [0, -1]];
 
-  var MODES = {
-    normal: { target: 9, maxTurns: 2, values: [1, 2, 3, 4, 5, 6, 7, 8] },
-    hard: { target: 9, maxTurns: 1, values: [1, 2, 3, 4, 5, 6, 7, 8] }
-  };
+  // Single rule set: sum 9 with digits 1-8, path may turn at most once.
+  var MODE = { target: 9, maxTurns: 1, values: [1, 2, 3, 4, 5, 6, 7, 8] };
 
   function makeRng(seed) {
     if (seed == null) return Math.random;
@@ -250,7 +248,7 @@
   function countTiles(grid) { return tilePositions(grid).length; }
 
   var api = {
-    MODES: MODES,
+    MODE: MODE,
     makeRng: makeRng,
     findPath: findPath,
     findPairs: findPairs,

@@ -6,7 +6,6 @@
 
   var GAME_MS = 120000;
   var COMBO_MS = 2000;
-  var HINTS = 3;
   var CLEAR_BONUS = 10;
   var PATH_MS = 250;
   var POP_MS = 300;
@@ -25,9 +24,6 @@
     set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
   };
 
-  var modeKey = store.get('nine.mode', 'normal');
-  if (!L.MODES[modeKey]) modeKey = 'normal';
-
   var S = null; // current game state
   var tileEls = new Map();
 
@@ -36,15 +32,11 @@
     Object.keys(screens).forEach(function (k) { screens[k].hidden = k !== name; });
   }
 
-  function bestKey() { return 'nine.best.' + modeKey; }
-  function getBest() { return Number(store.get(bestKey(), '0')) || 0; }
+  function getBest() { return Number(store.get('nine.best', '0')) || 0; }
 
   function refreshStart() {
-    document.querySelectorAll('.mode-btn').forEach(function (b) {
-      b.setAttribute('aria-checked', String(b.dataset.mode === modeKey));
-    });
     $('best-score').textContent = getBest();
-    I18n.setParams({ turns: L.MODES[modeKey].maxTurns });
+    I18n.setParams({ turns: L.MODE.maxTurns });
   }
 
   // ---------- Layout ----------
@@ -170,22 +162,25 @@
     setTimeout(function () { el.remove(); }, 800);
   }
 
-  function burst(p, color) {
+  // Confetti uses the popped pair's colors plus a few vivid accents.
+  var VIVID = ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#C77DFF', '#FF9F45'];
+  function palette() {
+    var out = VIVID.slice();
+    for (var v = 1; v <= 8; v++) out.push(colorOf(v));
+    return out;
+  }
+
+  function burst(p, colors) {
     var q = center(p);
-    var n = 6 + Math.floor(Math.random() * 3);
-    for (var i = 0; i < n; i++) {
-      var a = (Math.PI * 2 * i) / n + Math.random() * 0.6;
-      var d = S.cell * (0.6 + Math.random() * 0.5);
-      var el = document.createElement('div');
-      el.className = 'particle';
-      el.style.left = q.x + 'px';
-      el.style.top = q.y + 'px';
-      el.style.background = color;
-      el.style.setProperty('--dx', Math.cos(a) * d + 'px');
-      el.style.setProperty('--dy', Math.sin(a) * d + 'px');
-      fxLayer.appendChild(el);
-      setTimeout(el.remove.bind(el), 500);
-    }
+    Confetti.small(fxLayer, q.x, q.y, colors.concat(VIVID), S.cell / 52);
+  }
+
+  function celebratePerfect() {
+    Confetti.big(palette());
+    var el = $('perfect');
+    el.hidden = false;
+    restartAnim(el, 'show', 1600);
+    setTimeout(function () { el.hidden = true; }, 1600);
   }
 
   var toastTimer = 0;
@@ -231,8 +226,6 @@
     $('time-fill').style.transform = 'scaleX(' + left / GAME_MS + ')';
     hudEl.classList.toggle('urgent', left <= 10000 && left > 0);
     $('score-text').textContent = S.score;
-    $('hint-count').textContent = S.hintsLeft;
-    $('btn-hint').disabled = S.hintsLeft <= 0;
     if (S.combo >= 2 && S.elapsed - S.lastPopAt > COMBO_MS) {
       S.combo = 0;
       $('combo-text').textContent = '';
@@ -251,15 +244,14 @@
 
   // ---------- Game flow ----------
   function newGrid(rows, cols) {
-    return L.createBoard(rows, cols, S.mode, { minPairs: 3 });
+    return L.createBoard(rows, cols, L.MODE, { minPairs: 3 });
   }
 
   function startGame() {
     Sound.unlock();
-    var mode = L.MODES[modeKey];
     var landscape = wantLandscape();
     S = {
-      mode: mode,
+      mode: L.MODE,
       rows: landscape ? 6 : 8,
       cols: landscape ? 8 : 6,
       grid: null,
@@ -267,8 +259,7 @@
       selected: null,
       cursor: { r: 0, c: 0 },
       keyboard: false,
-      score: 0, pairs: 0, combo: 0, maxCombo: 0, lastPopAt: null,
-      clears: 0, hintsLeft: HINTS, hintsUsed: 0,
+      score: 0, pairs: 0, combo: 0, maxCombo: 0, lastPopAt: null, clears: 0,
       elapsed: 0, lastFrame: 0, lastSec: null,
       running: false, paused: false, over: false
     };
@@ -370,7 +361,7 @@
     S.pairs += 1;
     showCombo();
 
-    [elA, elB].forEach(function (el) { el.classList.add('matched'); el.classList.remove('selected', 'hint'); });
+    [elA, elB].forEach(function (el) { el.classList.add('matched'); el.classList.remove('selected'); });
     drawPath(path, colorOf(ta.v));
     placeAll();
 
@@ -378,7 +369,7 @@
       Sound.play('pop', S.combo);
       [[elA, a, ta], [elB, b, tb]].forEach(function (x) {
         x[0].classList.add('popping');
-        burst(x[1], colorOf(x[2].v));
+        burst(x[1], [colorOf(ta.v), colorOf(tb.v)]);
       });
       floatText(b, '+' + gained);
       setTimeout(function () {
@@ -393,7 +384,7 @@
       setTimeout(function () {
         if (!S || S.over) return;
         Sound.play('clear');
-        toast(t('clear'));
+        celebratePerfect();
         S.grid = newGrid(S.rows, S.cols);
         S.selected = null;
         placeAll();
@@ -418,20 +409,6 @@
     });
     if (sum !== S.mode.target) floatText(b, String(sum), 'bad');
     placeAll();
-  }
-
-  function useHint() {
-    if (!canPlay()) return;
-    if (S.hintsLeft <= 0) { toast(t('noHints')); return; }
-    var pairs = L.findPairs(S.grid, S.mode.target, S.mode.maxTurns, 8);
-    if (!pairs.length) return;
-    var m = pairs[Math.floor(Math.random() * pairs.length)];
-    S.hintsLeft -= 1;
-    S.hintsUsed += 1;
-    [m.a, m.b].forEach(function (p) {
-      restartAnim(tileEls.get(S.grid[p.r][p.c].id), 'hint', 1000);
-    });
-    renderHud();
   }
 
   function pause() {
@@ -463,18 +440,9 @@
     S.over = true;
     S.selected = null;
     Sound.play('end');
-    var best = getBest();
-    var isNew = S.score > best;
-    if (isNew) { best = S.score; store.set(bestKey(), String(best)); }
-    S.best = best;
+    if (S.score > getBest()) store.set('nine.best', String(S.score));
     setTimeout(function () {
       $('r-score').textContent = S.score;
-      $('r-pairs').textContent = S.pairs;
-      $('r-combo').textContent = S.maxCombo;
-      $('r-clears').textContent = S.clears;
-      $('r-hints').textContent = S.hintsUsed;
-      $('r-best').textContent = best;
-      $('r-new').hidden = !isNew;
       clearBoardEls();
       show('result');
     }, 500);
@@ -499,17 +467,9 @@
     g.strokeStyle = css('--text'); g.lineWidth = 6; g.setLineDash([3, 12]); g.lineCap = 'round';
     g.beginPath(); g.moveTo(270, 110); g.lineTo(330, 110); g.stroke(); g.setLineDash([]);
     g.fillStyle = css('--text'); g.textAlign = 'center';
-    g.font = '900 40px ' + font; g.fillText(t('title'), W / 2, 200);
-    g.font = '600 22px ' + font; g.fillStyle = css('--muted');
-    g.fillText(t(modeKey === 'hard' ? 'modeLabelHard' : 'modeLabelNormal'), W / 2, 240);
-    g.fillStyle = css('--accent'); g.font = '900 130px ' + font; g.fillText(String(S.score), W / 2, 340);
-    g.fillStyle = css('--muted'); g.font = '700 24px ' + font; g.fillText(t('points'), W / 2, 420);
-    var stats = [[t('pairs'), S.pairs], [t('maxCombo'), S.maxCombo], [t('clears'), S.clears]];
-    stats.forEach(function (s, i) {
-      var x = 110 + i * 190;
-      g.fillStyle = css('--muted'); g.font = '600 18px ' + font; g.fillText(s[0], x, 480);
-      g.fillStyle = css('--text'); g.font = '900 34px ' + font; g.fillText(String(s[1]), x, 522);
-    });
+    g.font = '900 40px ' + font; g.fillText(t('title'), W / 2, 210);
+    g.fillStyle = css('--accent'); g.font = '900 150px ' + font; g.fillText(String(S.score), W / 2, 360);
+    g.fillStyle = css('--muted'); g.font = '700 26px ' + font; g.fillText(t('points'), W / 2, 450);
     g.fillStyle = css('--muted'); g.font = '500 16px ' + font; g.fillText(location.host || 'nine.duruwap.com', W / 2, 572);
     return cv;
   }
@@ -526,7 +486,7 @@
 
   function share() {
     if (!S) return;
-    var text = t('shareText', { score: S.score, pairs: S.pairs, combo: S.maxCombo }) + ' ' + location.href;
+    var text = t('shareText', { score: S.score }) + ' ' + location.href;
     shareImage().toBlob(function (blob) {
       var file = blob && typeof File === 'function' ? new File([blob], 'nine-link.png', { type: 'image/png' }) : null;
       if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -586,8 +546,6 @@
       S.keyboard = true;
       select(S.cursor.r, S.cursor.c);
       placeAll();
-    } else if (e.key === 'h' || e.key === 'H' || e.key === 'ㅗ') {
-      useHint();
     }
   });
 
@@ -608,18 +566,10 @@
   }, { passive: false });
 
   // ---------- Buttons ----------
-  document.querySelectorAll('.mode-btn').forEach(function (b) {
-    b.addEventListener('click', function () {
-      modeKey = b.dataset.mode;
-      store.set('nine.mode', modeKey);
-      refreshStart();
-    });
-  });
   $('btn-start').addEventListener('click', startGame);
   $('btn-retry').addEventListener('click', startGame);
   $('btn-home').addEventListener('click', quit);
   $('btn-share').addEventListener('click', share);
-  $('btn-hint').addEventListener('click', useHint);
   $('btn-pause').addEventListener('click', pause);
   $('btn-resume').addEventListener('click', resume);
   $('btn-quit').addEventListener('click', quit);

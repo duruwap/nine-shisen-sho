@@ -3,8 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const L = require('../static/js/logic.js');
 
-const N = L.MODES.normal;
-const H = L.MODES.hard;
+const M = L.MODE;
 
 // Build a grid from rows of digits; '.' = empty.
 function g(rows) {
@@ -74,7 +73,7 @@ test('path points are corners only (straight runs collapsed)', () => {
 });
 
 test('deck is balanced: 6 of each pair type for 24 pairs', () => {
-  const deck = L.makeDeck(24, N, L.makeRng(1));
+  const deck = L.makeDeck(24, M, L.makeRng(1));
   assert.equal(deck.length, 48);
   const count = (v) => deck.filter((x) => x === v).length;
   for (const [a, b] of [[1, 8], [2, 7], [3, 6], [4, 5]]) {
@@ -85,16 +84,16 @@ test('deck is balanced: 6 of each pair type for 24 pairs', () => {
 
 test('first board has at least 3 connectable pairs', () => {
   for (let seed = 1; seed <= 30; seed++) {
-    const grid = L.createBoard(8, 6, N, { rng: L.makeRng(seed), minPairs: 3 });
-    assert.ok(L.findPairs(grid, 9, 2, 3).length >= 3);
+    const grid = L.createBoard(8, 6, M, { rng: L.makeRng(seed), minPairs: 3 });
+    assert.ok(L.findPairs(grid, 9, 1, 3).length >= 3);
   }
 });
 
 test('ensureMove keeps pair counts and always leaves a move', () => {
   const rng = L.makeRng(7);
   for (let trial = 0; trial < 200; trial++) {
-    // Random sparse, balanced board that is often stuck under hard rules.
-    const grid = L.createBoard(8, 6, H, { rng });
+    // Random sparse, balanced board that is often stuck under the 1-turn rule.
+    const grid = L.createBoard(8, 6, M, { rng });
     const pos = L.tilePositions(grid);
     // Remove random balanced pairs to create mid-game boards.
     const byVal = {};
@@ -106,29 +105,27 @@ test('ensureMove keeps pair counts and always leaves a move', () => {
       if (a && b) { grid[a.r][a.c] = null; grid[b.r][b.c] = null; }
     }
     const before = L.tilePositions(grid).map((p) => grid[p.r][p.c].v).sort().join();
-    const res = L.ensureMove(grid, H, rng);
+    const res = L.ensureMove(grid, M, rng);
     const after = L.tilePositions(grid).map((p) => grid[p.r][p.c].v).sort().join();
     assert.equal(before, after);
-    if (res !== 'empty') assert.ok(L.hasMove(grid, H), `trial ${trial} stuck after ${res}`);
+    if (res !== 'empty') assert.ok(L.hasMove(grid, M), `trial ${trial} stuck after ${res}`);
   }
 });
 
 test('full game can always be cleared by greedy play with ensureMove', () => {
-  for (const mode of [N, H]) {
-    const rng = L.makeRng(42);
-    for (let game = 0; game < 20; game++) {
-      const grid = L.createBoard(8, 6, mode, { rng, minPairs: 3 });
-      let steps = 0;
-      while (L.countTiles(grid) > 0) {
-        L.ensureMove(grid, mode, rng);
-        const [m] = L.findPairs(grid, mode.target, mode.maxTurns, 1);
-        assert.ok(m);
-        grid[m.a.r][m.a.c] = null;
-        grid[m.b.r][m.b.c] = null;
-        assert.ok(++steps <= 24);
-      }
-      assert.equal(steps, 24);
+  const rng = L.makeRng(42);
+  for (let game = 0; game < 40; game++) {
+    const grid = L.createBoard(8, 6, M, { rng, minPairs: 3 });
+    let steps = 0;
+    while (L.countTiles(grid) > 0) {
+      L.ensureMove(grid, M, rng);
+      const [m] = L.findPairs(grid, M.target, M.maxTurns, 1);
+      assert.ok(m);
+      grid[m.a.r][m.a.c] = null;
+      grid[m.b.r][m.b.c] = null;
+      assert.ok(++steps <= 24);
     }
+    assert.equal(steps, 24);
   }
 });
 

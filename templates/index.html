@@ -44,15 +44,6 @@
       <h1 class="title"><span data-i18n="title">9천성</span></h1>
       <p class="subtitle" data-i18n="tagline">합이 9인 두 패를 꺾인 선으로 이어 팡!</p>
 
-      <div class="mode-select" role="radiogroup">
-        <button class="mode-btn" data-mode="normal" role="radio">
-          <b data-i18n="modeNormal">기본</b><small data-i18n="modeNormalDesc">최대 2번 꺾임</small>
-        </button>
-        <button class="mode-btn" data-mode="hard" role="radio">
-          <b data-i18n="modeHard">하드</b><small data-i18n="modeHardDesc">최대 1번 꺾임</small>
-        </button>
-      </div>
-
       <button class="primary-btn" id="btn-start" data-i18n="start">시작</button>
       <p class="best"><span data-i18n="best">최고기록</span> <b id="best-score">0</b></p>
     </section>
@@ -76,23 +67,13 @@
       </div>
 
       <div class="controls">
-        <button class="ctrl-btn" id="btn-hint">💡 <span data-i18n="hint">힌트</span> <b id="hint-count">3</b></button>
         <button class="ctrl-btn" id="btn-pause">⏸ <span data-i18n="pause">일시정지</span></button>
       </div>
     </section>
 
     <!-- Result -->
     <section class="screen" id="screen-result" hidden>
-      <p class="result-label" data-i18n="timeUp">시간 종료!</p>
       <div class="result-score"><b id="r-score">0</b><small data-i18n="points">점</small></div>
-      <p class="result-new" id="r-new" hidden data-i18n="newBest">🎉 최고기록!</p>
-      <dl class="result-stats">
-        <div><dt data-i18n="pairs">터뜨린 쌍</dt><dd id="r-pairs">0</dd></div>
-        <div><dt data-i18n="maxCombo">최고 콤보</dt><dd id="r-combo">0</dd></div>
-        <div><dt data-i18n="clears">판 클리어</dt><dd id="r-clears">0</dd></div>
-        <div><dt data-i18n="hintsUsed">힌트 사용</dt><dd id="r-hints">0</dd></div>
-        <div><dt data-i18n="best">최고기록</dt><dd id="r-best">0</dd></div>
-      </dl>
       <div class="result-actions">
         <button class="primary-btn" id="btn-retry" data-i18n="retry">다시하기</button>
         <button class="secondary-btn" id="btn-share" data-i18n="share">결과 공유</button>
@@ -146,11 +127,15 @@
     </div>
   </div>
 
+  <canvas class="confetti-canvas" id="confetti" aria-hidden="true"></canvas>
+  <div class="perfect" id="perfect" aria-hidden="true" hidden><b>PERFECT!</b><small>+10</small></div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="{{ url_for('static', filename='js/logic.js') }}"></script>
   <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
   <script src="{{ url_for('static', filename='js/audio.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/confetti.js') }}"></script>
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

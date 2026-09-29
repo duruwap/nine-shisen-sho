@@ -1,4 +1,5 @@
 import os
+import subprocess
 
 from flask import Flask, render_template, request, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -10,6 +11,21 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 # Public origin for link previews (KakaoTalk etc. need absolute og:image URLs).
 # Set PUBLIC_URL in scsrun.conf; falls back to the request's host.
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")
+
+
+def _build_version():
+    """Short git commit of the running code, to confirm what is actually deployed."""
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            capture_output=True, text=True, timeout=5, check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
+BUILD = _build_version()
 # Static URLs carry a ?v=<mtime> version (see `asset` below), so browsers may
 # cache them for a long time and still pick up every deploy immediately.
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 60 * 60 * 24 * 365
@@ -28,7 +44,7 @@ def asset_helper():
         base = PUBLIC_URL or request.url_root.rstrip("/")
         return base + path
 
-    return {"asset": asset, "absolute": absolute}
+    return {"asset": asset, "absolute": absolute, "build": BUILD}
 
 
 @app.route("/")
@@ -41,7 +57,7 @@ def index():
 
 @app.route("/healthz")
 def healthz():
-    return {"status": "ok"}
+    return {"status": "ok", "build": BUILD, "public_url": PUBLIC_URL or None}
 
 
 if __name__ == "__main__":

@@ -171,7 +171,16 @@ do_start() {
     do_stop
 
     if port_in_use; then
-        die "포트 $PORT 을(를) 다른 프로세스가 사용 중입니다 (확인: ss -ltnp 'sport = :$PORT')"
+        # Something not tracked by our PID file (e.g. an old manual run) still serves the
+        # port — and keeps serving the OLD code. Show who it is instead of guessing.
+        log "오류: 포트 $PORT 을(를) PID 파일에 없는 다른 프로세스가 사용 중입니다." >&2
+        log "      그 프로세스가 계속 예전 코드를 서비스하고 있을 수 있습니다. 종료 후 다시 실행하세요." >&2
+        if command -v ss >/dev/null 2>&1; then
+            ss -ltnp "sport = :$PORT" 2>/dev/null >&2 || true
+        elif command -v lsof >/dev/null 2>&1; then
+            lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >&2 || true
+        fi
+        exit 1
     fi
     cleanup_logs
 
@@ -218,6 +227,7 @@ do_status() {
         else
             log "실행 중이지만 헬스체크 실패 (PID $pid, 포트 $PORT)"
         fi
+        [ -n "$HEALTH_PATH" ] && log "헬스체크: $(curl -fsS -m 2 "http://127.0.0.1:$PORT$HEALTH_PATH" 2>/dev/null)"
         log "로그: $(today_log)"
         return 0
     fi

@@ -24,6 +24,8 @@ python app.py          # http://localhost:15004
 | PID | `/scsrun/pid/nine-shisen-sho.pid` |
 | 로그 | `/scslog/app/nine-shisen-sho/app-YYYY-MM-DD.log` (일별, `LOG_KEEP_DAYS`일 보관) |
 
+배포 확인: `./startup.sh status` 또는 `curl -s localhost:15004/healthz` 가 `{"build": "<커밋>"}` 를 돌려줍니다(페이지 `<meta name="build">` 에도 있음). `git log -1 --format=%h` 와 다르면 예전 코드가 떠 있는 것입니다. 포트를 PID 파일에 없는 프로세스가 잡고 있으면 `startup.sh`가 그 프로세스를 보여 주고 멈춥니다(그 프로세스가 계속 옛 코드를 서비스함).
+
 실제 동작은 공통 런처 `scripts/scs-run.sh <앱이름>`이 담당하고, 포트·워커 수 등은 `scsrun.conf`에서 바꿉니다. 다른 앱에서는 `startup.sh`의 `APP_NAME`(=레포지토리 이름)과 `scsrun.conf`만 바꿔 그대로 씁니다. git pull·pip 설치가 실패하면 기존 서버는 멈추지 않고 그대로 둡니다.
 
 ## 링크 미리보기 (카카오톡 등)

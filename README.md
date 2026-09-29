@@ -9,6 +9,23 @@ pip install -r requirements.txt
 python app.py          # http://localhost:15004
 ```
 
+## 서버 운영 (Ubuntu)
+
+```bash
+./startup.sh              # git pull → 의존성 → 기존 프로세스 종료 → gunicorn 기동 (포트 15004)
+./startup.sh --no-pull    # git pull 없이 재기동
+./startup.sh stop | status | logs
+./startup.sh dev          # Flask 개발 서버(포그라운드, 자동 리로드)
+```
+
+| 항목 | 경로 |
+| --- | --- |
+| 프로젝트 | `/scsrun/app/nine-shisen-sho` (startup.sh 위치 기준) |
+| PID | `/scsrun/pid/nine-shisen-sho.pid` |
+| 로그 | `/scslog/app/nine-shisen-sho/app-YYYY-MM-DD.log` (일별, `LOG_KEEP_DAYS`일 보관) |
+
+실제 동작은 공통 런처 `scripts/scs-run.sh <앱이름>`이 담당하고, 포트·워커 수 등은 `scsrun.conf`에서 바꿉니다. 다른 앱에서는 `startup.sh`의 `APP_NAME`(=레포지토리 이름)과 `scsrun.conf`만 바꿔 그대로 씁니다. git pull·pip 설치가 실패하면 기존 서버는 멈추지 않고 그대로 둡니다.
+
 ## 테스트
 
 ```bash
@@ -19,7 +36,9 @@ node --test tests/*.test.js   # 경로 판정 · 보드 생성 · 막힘 처리
 
 | 파일 | 역할 |
 | --- | --- |
-| `app.py` | Flask 서버 (포트 15004), `/` 게임 · `/healthz` |
+| `app.py` | Flask 앱, `/` 게임 · `/healthz` |
+| `wsgi.py` | gunicorn 진입점 (`wsgi:app`), `startup.sh dev`에서 직접 실행 |
+| `startup.sh`, `scripts/scs-run.sh`, `scsrun.conf` | 서버 기동 스크립트 · 공통 런처 · 설정 |
 | `templates/index.html` | 시작 · 게임 · 결과 화면, 규칙/설정/일시정지 오버레이 |
 | `static/js/logic.js` | DOM 없는 규칙 엔진: 최소 꺾임 BFS 경로 판정(외곽 1칸 포함), 균형 보드 생성, 막힘 검사 → 셔플(10회) → 값 스왑 보정 |
 | `static/js/main.js` | 게임 루프, 점수·콤보, 입력(탭/클릭/키보드), 점선 경로·팡·셔플 연출, 결과 공유 이미지 |

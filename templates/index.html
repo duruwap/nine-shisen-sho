@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#FFF8F0">
+  <meta name="description" content="합이 9인 두 패를 꺾인 선으로 이어 팡! 2분 동안 최대한 많이 터뜨리기">
+  <title>9천성 · Nine Link</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='24' height='24' rx='7' fill='%23FFB5A7'/%3E%3Crect x='36' y='36' width='24' height='24' rx='7' fill='%23A0C4FF'/%3E%3Cpath d='M16 28v20h20' fill='none' stroke='%23555' stroke-width='4' stroke-dasharray='5 4' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script>
+    // Apply the saved theme before first paint.
+    try { var t = localStorage.getItem('nine.theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="menu">
+      <div class="lang-wrap">
+        <button class="icon-btn" id="btn-lang" aria-haspopup="true" aria-expanded="false" data-i18n-title="language">🌐</button>
+        <div class="lang-menu" id="lang-menu" hidden>
+          <button data-lang="ko">한국어</button>
+          <button data-lang="en">English</button>
+          <button data-lang="zh">中文</button>
+          <button data-lang="ja">日本語</button>
+        </div>
+      </div>
+      <button class="icon-btn" id="btn-theme" data-i18n-title="theme">☀️</button>
+      <button class="icon-btn" id="btn-rules" data-i18n-title="rules">📖</button>
+      <button class="icon-btn" id="btn-settings" data-i18n-title="settings">⚙️</button>
+    </div>
+  </header>
+
+  <main id="app">
+    <!-- Start -->
+    <section class="screen" id="screen-start">
+      <svg class="logo" viewBox="0 0 120 120" aria-hidden="true">
+        <rect x="10" y="10" width="44" height="44" rx="12" class="logo-a"/>
+        <rect x="66" y="66" width="44" height="44" rx="12" class="logo-b"/>
+        <text x="32" y="42" class="logo-num">4</text>
+        <text x="88" y="98" class="logo-num">5</text>
+        <path d="M32 54 V88 H66" class="logo-path"/>
+      </svg>
+      <h1 class="title"><span data-i18n="title">9천성</span></h1>
+      <p class="subtitle" data-i18n="tagline">합이 9인 두 패를 꺾인 선으로 이어 팡!</p>
+
+      <div class="mode-select" role="radiogroup">
+        <button class="mode-btn" data-mode="normal" role="radio">
+          <b data-i18n="modeNormal">기본</b><small data-i18n="modeNormalDesc">최대 2번 꺾임</small>
+        </button>
+        <button class="mode-btn" data-mode="hard" role="radio">
+          <b data-i18n="modeHard">하드</b><small data-i18n="modeHardDesc">최대 1번 꺾임</small>
+        </button>
+      </div>
+
+      <button class="primary-btn" id="btn-start" data-i18n="start">시작</button>
+      <p class="best"><span data-i18n="best">최고기록</span> <b id="best-score">0</b></p>
+    </section>
+
+    <!-- Game -->
+    <section class="screen" id="screen-game" hidden>
+      <div class="hud">
+        <div class="timebar"><div class="timebar-fill" id="time-fill"></div></div>
+        <div class="hud-row">
+          <div class="hud-time"><b id="time-text">120</b><small data-i18n="sec">초</small></div>
+          <div class="hud-combo" id="combo-text"></div>
+          <div class="hud-score"><small data-i18n="score">점수</small><b id="score-text">0</b></div>
+        </div>
+      </div>
+
+      <div class="board-wrap" id="board-wrap">
+        <div class="board" id="board">
+          <svg class="path-layer" id="path-layer" aria-hidden="true"></svg>
+          <div class="fx-layer" id="fx-layer" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="ctrl-btn" id="btn-hint">💡 <span data-i18n="hint">힌트</span> <b id="hint-count">3</b></button>
+        <button class="ctrl-btn" id="btn-pause">⏸ <span data-i18n="pause">일시정지</span></button>
+      </div>
+    </section>
+
+    <!-- Result -->
+    <section class="screen" id="screen-result" hidden>
+      <p class="result-label" data-i18n="timeUp">시간 종료!</p>
+      <div class="result-score"><b id="r-score">0</b><small data-i18n="points">점</small></div>
+      <p class="result-new" id="r-new" hidden data-i18n="newBest">🎉 최고기록!</p>
+      <dl class="result-stats">
+        <div><dt data-i18n="pairs">터뜨린 쌍</dt><dd id="r-pairs">0</dd></div>
+        <div><dt data-i18n="maxCombo">최고 콤보</dt><dd id="r-combo">0</dd></div>
+        <div><dt data-i18n="clears">판 클리어</dt><dd id="r-clears">0</dd></div>
+        <div><dt data-i18n="hintsUsed">힌트 사용</dt><dd id="r-hints">0</dd></div>
+        <div><dt data-i18n="best">최고기록</dt><dd id="r-best">0</dd></div>
+      </dl>
+      <div class="result-actions">
+        <button class="primary-btn" id="btn-retry" data-i18n="retry">다시하기</button>
+        <button class="secondary-btn" id="btn-share" data-i18n="share">결과 공유</button>
+        <button class="text-btn" id="btn-home" data-i18n="home">처음으로</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Rule card shown for 3s before the first game -->
+  <div class="overlay" id="rule-card" hidden>
+    <div class="card rule-card">
+      <div class="rule-demo" aria-hidden="true">
+        <span class="chip v4">4</span><span class="rule-dots"></span><span class="chip v5">5</span>
+      </div>
+      <p data-i18n-html="ruleCard">합이 <b>9</b>인 두 패를<br>최대 2번 꺾이는 선으로 이으면 팡!</p>
+      <div class="rule-countdown" id="rule-countdown">3</div>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div class="overlay" id="pause-overlay" hidden>
+    <div class="card">
+      <h2 data-i18n="paused">일시정지</h2>
+      <button class="primary-btn" id="btn-resume" data-i18n="resume">계속하기</button>
+      <button class="text-btn" id="btn-quit" data-i18n="quit">그만하기</button>
+    </div>
+  </div>
+
+  <!-- Rules -->
+  <div class="overlay" id="rules-modal" hidden>
+    <div class="card modal">
+      <h2 data-i18n="rulesTitle">규칙</h2>
+      <ul class="rules-list" data-i18n-html="rulesBody"></ul>
+      <button class="primary-btn" data-close data-i18n="ok">확인</button>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="overlay" id="settings-modal" hidden>
+    <div class="card modal">
+      <h2 data-i18n="settings">설정</h2>
+      <label class="setting-row">
+        <span data-i18n="sound">효과음</span>
+        <input type="checkbox" id="set-sound" class="switch">
+      </label>
+      <label class="setting-row">
+        <span data-i18n="volume">볼륨</span>
+        <input type="range" id="set-volume" min="0" max="100" step="1">
+      </label>
+      <button class="primary-btn" data-close data-i18n="ok">확인</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="{{ url_for('static', filename='js/logic.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/i18n.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/audio.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
